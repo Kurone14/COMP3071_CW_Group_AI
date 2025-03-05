@@ -1,11 +1,17 @@
+"""
+Performance Metrics Module
+Tracks and analyzes the performance of robots during simulation
+"""
 import time
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from collections import deque
+import config
 
 class PerformanceEvaluator:
     def __init__(self):
+        """Initialize the performance evaluator"""
         self.adaptation_times = []
         self.path_efficiencies = []
         self.mapping_accuracies = []
@@ -22,18 +28,20 @@ class PerformanceEvaluator:
         self.recent_task_times = deque(maxlen=100)
         
     def start_evaluation(self):
+        """Start performance evaluation"""
         self.start_time = time.time()
         
     def record_layout_change(self):
-        # Record when a layout change occurred
-        self.layout_change_times.append(time.time() - self.start_time)
+        """Record when a layout change occurred"""
+        if self.start_time:
+            self.layout_change_times.append(time.time() - self.start_time)
         
     def record_adaptation(self, detection_time):
-        # Record time taken to adapt to layout change
+        """Record time taken to adapt to layout change"""
         self.adaptation_times.append(detection_time)
         
     def record_path_efficiency(self, robot_id, actual_path_length, optimal_path_length):
-        # Calculate and record path efficiency
+        """Calculate and record path efficiency"""
         if optimal_path_length > 0:
             efficiency = optimal_path_length / max(1, actual_path_length)
             self.path_efficiencies.append(efficiency)
@@ -45,7 +53,7 @@ class PerformanceEvaluator:
             self.robot_utilization[robot_id]['path_efficiencies'].append(efficiency)
         
     def record_mapping_accuracy(self, predicted_map, actual_map):
-        # Calculate mapping accuracy by comparing predicted environment map with ground truth
+        """Calculate mapping accuracy by comparing predicted environment map with ground truth"""
         # This is a simplified implementation
         total_cells = len(actual_map)
         matching_cells = sum(1 for p, a in zip(predicted_map, actual_map) if p == a)
@@ -53,6 +61,7 @@ class PerformanceEvaluator:
         self.mapping_accuracies.append(accuracy)
         
     def record_collision_event(self, robot_id, is_near_miss=False):
+        """Record a collision event"""
         if is_near_miss:
             self.collision_near_misses += 1
         else:
@@ -67,6 +76,7 @@ class PerformanceEvaluator:
             self.robot_utilization[robot_id]['collisions'] += 1
     
     def record_task_completion(self, robot_id, task_type, start_time, end_time):
+        """Record task completion metrics"""
         completion_time = end_time - start_time
         self.task_completion_times.append((task_type, completion_time))
         self.recent_task_times.append(completion_time)
@@ -103,7 +113,7 @@ class PerformanceEvaluator:
             self.robot_utilization[robot_id]['dropoff_tasks'] += 1
             
     def get_collision_rate(self):
-        # Calculate collisions per minute over recent history
+        """Calculate collisions per minute over recent history"""
         if not self.recent_collisions or self.start_time is None:
             return 0
         
@@ -114,17 +124,19 @@ class PerformanceEvaluator:
         return recent_count / (recent_window / 60)  # Collisions per minute
     
     def get_average_recent_efficiency(self):
+        """Get the average path efficiency over recent history"""
         if not self.recent_path_efficiencies:
             return 0
         return sum(self.recent_path_efficiencies) / len(self.recent_path_efficiencies)
     
     def get_average_recent_task_time(self):
+        """Get the average task completion time over recent history"""
         if not self.recent_task_times:
             return 0
         return sum(self.recent_task_times) / len(self.recent_task_times)
     
     def generate_report(self):
-        # Generate comprehensive performance report
+        """Generate comprehensive performance report"""
         total_time = time.time() - self.start_time if self.start_time else 0
         
         # Calculate throughput metrics
@@ -177,6 +189,7 @@ class PerformanceEvaluator:
         return report
     
     def generate_performance_graphs(self):
+        """Generate and save performance visualization graphs"""
         # Create a figure with multiple subplots for a more comprehensive visualization
         plt.figure(figsize=(15, 12))
         
@@ -286,8 +299,8 @@ class PerformanceEvaluator:
         plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust for the suptitle
         
         # Save the figure
-        plt.savefig('performance_report.png')
-        print("Performance graphs saved to 'performance_report.png'")
+        plt.savefig(config.REPORT_FILE)
+        print(f"Performance graphs saved to '{config.REPORT_FILE}'")
         
         # Close the figure to free memory
         plt.close()

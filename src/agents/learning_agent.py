@@ -1,28 +1,34 @@
+"""
+Robot Learning Agent Module
+Q-learning based agent for controlling warehouse robots
+"""
 import pickle
 import numpy as np
 import random
 import os
 import math
+import config
 
 class RobotLearningAgent:
     def __init__(self, robot_id):
+        """Initialize the learning agent for a specific robot"""
         self.robot_id = robot_id
-        self.learning_rate = 0.1
-        self.discount_factor = 0.9
-        self.exploration_rate = 1.0
-        self.exploration_decay = 0.995
-        self.min_exploration_rate = 0.01
+        self.learning_rate = config.LEARNING_RATE
+        self.discount_factor = config.DISCOUNT_FACTOR
+        self.exploration_rate = config.EXPLORATION_RATE
+        self.exploration_decay = config.EXPLORATION_DECAY
+        self.min_exploration_rate = config.MIN_EXPLORATION_RATE
         self.q_table = {}  # State-action value function
         self.state_history = []
         self.action_history = []
         self.reward_history = []
         
     def initialize_learning_model(self):
-        # Initialize Q-learning model
+        """Initialize Q-learning model"""
         self.q_table = {}
         
     def get_state_representation(self, robot, environment):
-        # Create a more informative discrete state representation
+        """Create a more informative discrete state representation"""
         # Simplify robot position to grid cells
         grid_size = 50
         x_pos = int(robot.body.position.x / grid_size)
@@ -64,6 +70,7 @@ class RobotLearningAgent:
         return state
         
     def get_action(self, robot, environment):
+        """Choose an action using epsilon-greedy policy"""
         # Get current state
         state = self.get_state_representation(robot, environment)
         
@@ -78,11 +85,12 @@ class RobotLearningAgent:
         return action
     
     def get_possible_actions(self, robot):
+        """Define possible actions for the robot"""
         # Define possible actions: move in 8 directions or stay
         return ['up', 'down', 'left', 'right', 'up_left', 'up_right', 'down_left', 'down_right', 'stay']
     
     def get_best_action(self, state, robot):
-        # Get best action from Q-table
+        """Get best action from Q-table for the current state"""
         if state not in self.q_table:
             # If state not in Q-table, initialize it
             self.q_table[state] = {action: 0 for action in self.get_possible_actions(robot)}
@@ -92,7 +100,7 @@ class RobotLearningAgent:
         return best_action
     
     def calculate_reward(self, robot, environment, prev_state, action, new_state):
-        # Calculate reward based on various factors
+        """Calculate reward based on various factors"""
         reward = 0
         
         # Penalty for collisions
@@ -131,7 +139,8 @@ class RobotLearningAgent:
         return reward
     
     def check_collision(self, robot, environment):
-        # Check if robot is colliding with any obstacle
+        """Check if robot is colliding with any obstacle or other robot"""
+        # Check collision with obstacles
         for obstacle in environment.obstacles:
             x, y = robot.body.position
             ox, oy = obstacle['position']
@@ -154,10 +163,11 @@ class RobotLearningAgent:
         return False
     
     def distance_to_target(self, position, target):
-        # Calculate Euclidean distance
+        """Calculate Euclidean distance"""
         return math.sqrt((position[0] * 50 - target[0])**2 + (position[1] * 50 - target[1])**2)
     
     def train(self, environment, robot, episode_num):
+        """Train the agent for one step"""
         # Get current state
         state = self.get_state_representation(robot, environment)
         
@@ -190,6 +200,7 @@ class RobotLearningAgent:
         return reward
     
     def update_q_table(self, state, action, reward, new_state):
+        """Update Q-table using Q-learning update rule"""
         # Initialize state in Q-table if not present
         if state not in self.q_table:
             self.q_table[state] = {a: 0 for a in self.get_possible_actions(None)}
@@ -207,12 +218,12 @@ class RobotLearningAgent:
         )
     
     def save_model(self, filename):
-        # Save the Q-table to a file
+        """Save the Q-table to a file"""
         with open(filename, 'wb') as f:
             pickle.dump(self.q_table, f)
     
     def load_model(self, filename):
-        # Load the Q-table from a file
+        """Load the Q-table from a file"""
         if os.path.exists(filename):
             with open(filename, 'rb') as f:
                 self.q_table = pickle.load(f)

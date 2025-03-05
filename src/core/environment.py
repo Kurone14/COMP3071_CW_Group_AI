@@ -1,10 +1,16 @@
+"""
+Warehouse Environment Module
+Handles the warehouse layout, obstacles, pickup/dropoff points,
+and environment state management.
+"""
 import pygame
-import numpy as np
 import random
 import math
+import config
 
 class WarehouseEnvironment:
     def __init__(self, width, height):
+        """Initialize the warehouse environment"""
         self.width = width
         self.height = height
         self.obstacles = []
@@ -14,10 +20,11 @@ class WarehouseEnvironment:
         self.pickup_points = []
         self.dropoff_points = []
         
-        # Create initial pickup and dropoff points with better placement
+        # Create initial pickup and dropoff points
         self.create_logistics_points()
         
     def create_logistics_points(self):
+        """Create pickup, dropoff points and shelves with better placement"""
         # Create pickup points (green) in a logical layout
         self.pickup_points = [
             {'position': (50, 500), 'size': (30, 30), 'id': 0},
@@ -43,7 +50,7 @@ class WarehouseEnvironment:
         ]
     
     def add_obstacle(self, position, size, is_temporary=False):
-        # Add obstacles to the environment with validation
+        """Add obstacles to the environment with validation"""
         x, y = position
         w, h = size
         
@@ -62,7 +69,7 @@ class WarehouseEnvironment:
         self.obstacles.append(obstacle)
         
     def change_layout(self):
-        # Improved layout changes that maintain warehouse organization
+        """Improved layout changes that maintain warehouse organization"""
         self.layout_version += 1
         
         # Remove temporary obstacles
@@ -129,11 +136,12 @@ class WarehouseEnvironment:
         print(f"Layout changed to version {self.layout_version}")
         
     def add_robot(self, robot):
+        """Add robot to the environment"""
         self.robots.append(robot)
         robot.environment = self
         
     def reset(self):
-        # Reset environment state for new training episode
+        """Reset environment state for new training episode"""
         for i, robot in enumerate(self.robots):
             # Reset robot positions with better spacing
             pos_x = 50 + (i * min(100, (self.width - 100) / max(1, len(self.robots) - 1)))
@@ -156,7 +164,7 @@ class WarehouseEnvironment:
         self.create_logistics_points()
         
     def step(self, learning_agents=None, evaluator=None):
-        # Update environment state
+        """Update environment state for one timestep"""
         for i, robot in enumerate(self.robots):
             # Update robot's perception
             robot.update_perception(self)
@@ -173,7 +181,8 @@ class WarehouseEnvironment:
         self.check_collisions(evaluator)
         
     def check_collisions(self, evaluator=None):
-        # Improved collision detection and handling
+        """Improved collision detection and handling"""
+        # Check for robot-robot collisions
         for i, robot1 in enumerate(self.robots):
             # Check for robot-robot collisions
             for j, robot2 in enumerate(self.robots[i+1:], i+1):
@@ -209,9 +218,10 @@ class WarehouseEnvironment:
                         )
         
     def render(self, screen):
+        """Render the environment state with improved visuals"""
         # Draw pickup points (green)
         for point in self.pickup_points:
-            pygame.draw.rect(screen, (0, 255, 0), 
+            pygame.draw.rect(screen, config.PICKUP_COLOR, 
                             (point['position'][0], point['position'][1], 
                              point['size'][0], point['size'][1]))
             # Add label
@@ -221,7 +231,7 @@ class WarehouseEnvironment:
         
         # Draw dropoff points (blue)
         for point in self.dropoff_points:
-            pygame.draw.rect(screen, (0, 0, 255), 
+            pygame.draw.rect(screen, config.DROPOFF_COLOR, 
                             (point['position'][0], point['position'][1], 
                              point['size'][0], point['size'][1]))
             # Add label
@@ -231,7 +241,7 @@ class WarehouseEnvironment:
         
         # Draw shelves (yellow)
         for shelf in self.shelves:
-            pygame.draw.rect(screen, (255, 255, 0), 
+            pygame.draw.rect(screen, config.SHELF_COLOR, 
                             (shelf['position'][0], shelf['position'][1], 
                              shelf['size'][0], shelf['size'][1]))
             # Add label
@@ -241,7 +251,7 @@ class WarehouseEnvironment:
         
         # Draw obstacles
         for obstacle in self.obstacles:
-            color = (100, 100, 100) if obstacle['temporary'] else (0, 0, 0)
+            color = config.OBSTACLE_COLORS["temporary"] if obstacle['temporary'] else config.OBSTACLE_COLORS["permanent"]
             pygame.draw.rect(screen, color, 
                             (obstacle['position'][0], obstacle['position'][1], 
                              obstacle['size'][0], obstacle['size'][1]))

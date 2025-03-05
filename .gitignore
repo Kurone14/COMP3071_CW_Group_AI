@@ -61,3 +61,7 @@ htmlcov/
 
 # Output folder
 output/
+
+# Model folder
+models/
+performance_report.png

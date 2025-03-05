@@ -1,13 +1,18 @@
+"""
+Warehouse Robot Module
+Defines the warehouse robot behavior, perception, movement, and task handling
+"""
 import pymunk
-import pygame
-import numpy as np
 import math
 import time
 import random
 from collections import deque
+import config
+from agents.path_planning import a_star_search, check_path_collision, line_intersects_rectangle
 
 class WarehouseRobot:
     def __init__(self, space, position, id):
+        """Initialize robot with physics body and properties"""
         self.id = id
         
         # Create the robot body
@@ -15,15 +20,15 @@ class WarehouseRobot:
         self.body.position = position
         
         # Create the robot shape
-        self.shape = pymunk.Circle(self.body, 10)
+        self.shape = pymunk.Circle(self.body, config.ROBOT_SIZE)
         self.shape.collision_type = 1
-        self.shape.friction = 0.7
+        self.shape.friction = config.FRICTION
         
-        # Add to space
+        # Add to physics space
         space.add(self.body, self.shape)
         
         # Perception capabilities
-        self.sensor_range = 150  # Increased range
+        self.sensor_range = config.ROBOT_SENSOR_RANGE
         self.sensors = []
         self.detected_obstacles = []
         self.known_layout = {}
@@ -32,7 +37,7 @@ class WarehouseRobot:
         self.path = []
         self.target = None
         self.target_id = None  # To track which pickup/dropoff point is targeted
-        self.max_speed = 80  # Decreased for better control
+        self.max_speed = config.ROBOT_MAX_SPEED
         self.state = "idle"  # idle, moving, pickup, dropoff
         
         # Task-related attributes
@@ -44,19 +49,13 @@ class WarehouseRobot:
         self.last_replan_time = time.time()
         self.position_history = []
         self.last_progress_time = time.time()
+        self.stuck_time = None
         
-        # Colors based on state
-        self.colors = {
-            "idle": (255, 0, 0),         # Red
-            "moving": (255, 165, 0),     # Orange
-            "pickup": (0, 255, 0),       # Green
-            "dropoff": (0, 0, 255),      # Blue
-            "carrying": (128, 0, 128)    # Purple when carrying items
-        }
-
+        # Reference to environment
         self.environment = None
     
     def update_perception(self, environment):
+        """Update robot's perception of the environment"""
         # Simulate sensor readings
         self.detected_obstacles = []
         
@@ -93,7 +92,7 @@ class WarehouseRobot:
                 self.detected_obstacles.append(shelf)
     
     def distance_to_obstacle(self, obstacle):
-        # Calculate distance to the closest point of the obstacle
+        """Calculate distance to the closest point of an obstacle"""
         x, y = self.body.position
         ox, oy = obstacle['position']
         ow, oh = obstacle['size']
@@ -104,205 +103,25 @@ class WarehouseRobot:
         return math.sqrt((x - closest_x)**2 + (y - closest_y)**2)
 
     def distance_to_point(self, point):
-        # Calculate Euclidean distance to a point
+        """Calculate Euclidean distance to a point"""
         return math.sqrt((self.body.position.x - point.x)**2 + (self.body.position.y - point.y)**2)
 
     def plan_path(self, target):
-        # Simple A* path planning implementation
+        """Plan a path to a target position"""
         self.target = target
-        self.path = self.a_star_search(self.body.position, target)
+        # Use the external path planning module
+        self.path = a_star_search(
+            self.body.position, 
+            target, 
+            self.detected_obstacles, 
+            config.GRID_SIZE,
+            self.environment.width,
+            self.environment.height
+        )
         self.state = "moving"
-        
-    def a_star_search(self, start, goal):
-        """Improved A* search that ensures robots can reach their targets"""
-        # Convert positions to grid coordinates
-        grid_size = 20
-        start_grid = (int(start.x / grid_size), int(start.y / grid_size))
-        goal_grid = (int(goal[0] / grid_size), int(goal[1] / grid_size))
-        
-        # If start or goal are outside boundaries, adjust them
-        width, height = self.environment.width, self.environment.height
-        if start_grid[0] < 0 or start_grid[0] >= width // grid_size or start_grid[1] < 0 or start_grid[1] >= height // grid_size:
-            print(f"Robot {self.id}: Start position out of bounds, adjusting")
-            start_grid = (
-                max(0, min(width // grid_size - 1, start_grid[0])),
-                max(0, min(height // grid_size - 1, start_grid[1]))
-            )
-        
-        if goal_grid[0] < 0 or goal_grid[0] >= width // grid_size or goal_grid[1] < 0 or goal_grid[1] >= height // grid_size:
-            print(f"Robot {self.id}: Goal position out of bounds, adjusting")
-            goal_grid = (
-                max(0, min(width // grid_size - 1, goal_grid[0])),
-                max(0, min(height // grid_size - 1, goal_grid[1]))
-            )
-        
-        # A* algorithm
-        import heapq
-        open_set = []
-        heapq.heappush(open_set, (self.heuristic(start_grid, goal_grid), 0, start_grid))  # f_score, tiebreaker, position
-        came_from = {}
-        g_score = {start_grid: 0}
-        f_score = {start_grid: self.heuristic(start_grid, goal_grid)}
-        closed_set = set()  # To track visited nodes
-        tiebreaker = 1  # To ensure heap uniqueness when f_scores are equal
-        
-        iterations = 0
-        max_iterations = 1000  # Prevent infinite loops
-        
-        while open_set and iterations < max_iterations:
-            iterations += 1
-            _, _, current = heapq.heappop(open_set)
-            
-            if current in closed_set:
-                continue
-                
-            closed_set.add(current)
-            
-            if current == goal_grid:
-                # Reconstruct path
-                path = []
-                while current in came_from:
-                    path.append((current[0] * grid_size + grid_size // 2, current[1] * grid_size + grid_size // 2))
-                    current = came_from[current]
-                path.reverse()
-                
-                # Add intermediate waypoints for smoother paths
-                smoothed_path = self.smooth_path(path)
-                
-                # Add goal exactly as target position
-                if smoothed_path:
-                    smoothed_path.append(goal)
-                else:
-                    smoothed_path.append(goal)
-                    
-                return smoothed_path
-            
-            # Check neighbors - 8 directions
-            for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]:
-                neighbor = (current[0] + dx, current[1] + dy)
-                
-                # Skip if outside grid
-                if (neighbor[0] < 0 or neighbor[0] >= width // grid_size or 
-                    neighbor[1] < 0 or neighbor[1] >= height // grid_size):
-                    continue
-                
-                # Skip if we've already processed this neighbor
-                if neighbor in closed_set:
-                    continue
-                    
-                # Check if neighbor is valid (not in obstacle)
-                if self.is_valid_position(neighbor, grid_size):
-                    # Movement cost is higher for diagonal moves
-                    move_cost = 1.414 if dx != 0 and dy != 0 else 1.0
-                    tentative_g = g_score[current] + move_cost
-                    
-                    if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                        came_from[neighbor] = current
-                        g_score[neighbor] = tentative_g
-                        f_score[neighbor] = tentative_g + self.heuristic(neighbor, goal_grid)
-                        heapq.heappush(open_set, (f_score[neighbor], tiebreaker, neighbor))
-                        tiebreaker += 1
-        
-        # If no path found after max iterations or empty open set
-        if iterations >= max_iterations:
-            print(f"Robot {self.id}: Path search exceeded max iterations, using direct path")
-        else:
-            print(f"Robot {self.id}: No path found, using direct path with waypoints")
-        
-        # Plan a simple path with intermediate waypoints
-        direct_path = self.plan_direct_path(start, goal)
-        return direct_path
-
-    def smooth_path(self, path):
-        """Smooth path by adding intermediate waypoints and removing unnecessary ones"""
-        if len(path) < 2:
-            return path
-            
-        smoothed = [path[0]]
-        
-        for i in range(1, len(path)):
-            # Add intermediate points for long segments
-            prev = path[i-1]
-            current = path[i]
-            distance = math.sqrt((current[0] - prev[0])**2 + (current[1] - prev[1])**2)
-            
-            if distance > 100:  # If segment is too long
-                # Add intermediate points
-                steps = int(distance / 50)
-                for step in range(1, steps):
-                    t = step / steps
-                    x = prev[0] + t * (current[0] - prev[0])
-                    y = prev[1] + t * (current[1] - prev[1])
-                    smoothed.append((x, y))
-            
-            smoothed.append(current)
-        
-        return smoothed
-
-    def plan_direct_path(self, start, goal):
-        """Plan a direct path with intermediate waypoints to handle obstacles"""
-        # Create a path with intermediate waypoints to navigate around potential obstacles
-        start_x, start_y = start.x, start.y
-        goal_x, goal_y = goal
-        
-        # Get environment dimensions
-        width, height = self.environment.width, self.environment.height
-        
-        # Create intermediate waypoints to avoid obstacles and stay in bounds
-        path = []
-        
-        # If start and goal are far apart, add intermediate waypoints
-        distance = math.sqrt((goal_x - start_x)**2 + (goal_y - start_y)**2)
-        
-        if distance > 100:
-            # Add waypoint at 1/3 distance
-            wx1 = start_x + (goal_x - start_x) / 3
-            wy1 = start_y + (goal_y - start_y) / 3
-            # Ensure waypoint is in bounds
-            wx1 = max(20, min(width - 20, wx1))
-            wy1 = max(20, min(height - 20, wy1))
-            path.append((wx1, wy1))
-            
-            # Add waypoint at 2/3 distance
-            wx2 = start_x + 2 * (goal_x - start_x) / 3
-            wy2 = start_y + 2 * (goal_y - start_y) / 3
-            # Ensure waypoint is in bounds
-            wx2 = max(20, min(width - 20, wx2))
-            wy2 = max(20, min(height - 20, wy2))
-            path.append((wx2, wy2))
-        
-        # Add the goal
-        path.append(goal)
-        
-        return path
-
-    def is_valid_position(self, position, grid_size):
-        # Check if position is valid (not in obstacle)
-        x, y = position[0] * grid_size, position[1] * grid_size
-        
-        # Check boundaries with a margin
-        margin = 10
-        if x < margin or y < margin or x >= self.environment.width - margin or y >= self.environment.height - margin:
-            return False
-        
-        # Check obstacles with padding
-        padding = grid_size // 2
-        for obstacle in self.detected_obstacles:
-            ox, oy = obstacle['position']
-            ow, oh = obstacle['size']
-            
-            if (x > ox - padding and x < ox + ow + padding and 
-                y > oy - padding and y < oy + oh + padding):
-                return False
-        
-        return True
-
-    def heuristic(self, a, b):
-        # Better heuristic - Euclidean distance
-        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
-
+    
     def execute_movement(self):
-        # Improved movement with better obstacle avoidance and path following
+        """Improved movement with better obstacle avoidance and path following"""
         if self.path and self.state == "moving":
             # Get next waypoint
             target = self.path[0]
@@ -313,7 +132,11 @@ class WarehouseRobot:
             distance = math.sqrt(dx*dx + dy*dy)
             
             # Check for obstacles in the direct path
-            collision_imminent = self.check_path_collision(target)
+            collision_imminent = check_path_collision(
+                (self.body.position.x, self.body.position.y), 
+                target, 
+                self.detected_obstacles
+            )
             
             if distance < 15:  # Waypoint reached
                 self.path.pop(0)
@@ -341,7 +164,7 @@ class WarehouseRobot:
                     
                     # If we're very close to an obstacle, consider replanning
                     if self.is_stuck_near_obstacle(5):
-                        if time.time() - self.last_replan_time > 3.0:  # Don't replan too often
+                        if time.time() - self.last_replan_time > config.REPLAN_TIME_THRESHOLD:  # Don't replan too often
                             print(f"Robot {self.id}: Replanning due to obstacle")
                             self.plan_path(self.target)
                             self.last_replan_time = time.time()
@@ -356,7 +179,7 @@ class WarehouseRobot:
             self.check_if_stuck()
         
         # Apply damping to simulate friction
-        self.body.velocity = self.body.velocity * 0.9
+        self.body.velocity = self.body.velocity * config.DAMPENING
         
         # Enforce speed limits
         current_speed = math.sqrt(self.body.velocity.x**2 + self.body.velocity.y**2)
@@ -370,58 +193,8 @@ class WarehouseRobot:
         # Enforce boundaries
         self.enforce_boundaries()
 
-    def check_path_collision(self, target):
-        # Check if there's an obstacle in direct path to target
-        for obstacle in self.detected_obstacles:
-            ox, oy = obstacle['position']
-            ow, oh = obstacle['size']
-            
-            # Simple line-rectangle intersection check
-            start_x, start_y = self.body.position.x, self.body.position.y
-            end_x, end_y = target[0], target[1]
-            
-            # Check if line intersects with obstacle
-            if self.line_intersects_rectangle(
-                start_x, start_y, end_x, end_y,
-                ox, oy, ox + ow, oy + oh
-            ):
-                return True
-        
-        return False
-
-    def line_intersects_rectangle(self, x1, y1, x2, y2, rx1, ry1, rx2, ry2):
-        # Check if line from (x1,y1) to (x2,y2) intersects with rectangle defined by (rx1,ry1) to (rx2,ry2)
-        
-        # Check if either endpoint is inside rectangle
-        if (rx1 <= x1 <= rx2 and ry1 <= y1 <= ry2) or (rx1 <= x2 <= rx2 and ry1 <= y2 <= ry2):
-            return True
-        
-        # Check each edge of the rectangle for intersection with the line
-        if self.line_segments_intersect(x1, y1, x2, y2, rx1, ry1, rx2, ry1):  # Top edge
-            return True
-        if self.line_segments_intersect(x1, y1, x2, y2, rx1, ry1, rx1, ry2):  # Left edge
-            return True
-        if self.line_segments_intersect(x1, y1, x2, y2, rx2, ry1, rx2, ry2):  # Right edge
-            return True
-        if self.line_segments_intersect(x1, y1, x2, y2, rx1, ry2, rx2, ry2):  # Bottom edge
-            return True
-        
-        return False
-
-    def line_segments_intersect(self, x1, y1, x2, y2, x3, y3, x4, y4):
-        # Check if line segments (x1,y1)-(x2,y2) and (x3,y3)-(x4,y4) intersect
-        def ccw(a, b, c):
-            return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
-        
-        a = (x1, y1)
-        b = (x2, y2)
-        c = (x3, y3)
-        d = (x4, y4)
-        
-        return ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
-
     def get_obstacle_avoidance_force(self):
-        # Calculate avoidance force based on nearby obstacles
+        """Calculate avoidance force based on nearby obstacles"""
         fx, fy = 0, 0
         robot_x, robot_y = self.body.position.x, self.body.position.y
         
@@ -453,7 +226,7 @@ class WarehouseRobot:
         return (fx, fy)
 
     def is_stuck_near_obstacle(self, threshold=10):
-        # Check if robot is very close to any obstacle
+        """Check if robot is very close to any obstacle"""
         robot_x, robot_y = self.body.position.x, self.body.position.y
         
         for obstacle in self.detected_obstacles:
@@ -506,14 +279,14 @@ class WarehouseRobot:
                 max_dist = max(max_dist, dist)
             
             # If we haven't moved much, we might be stuck
-            if max_dist < 20:
+            if max_dist < config.STUCK_THRESHOLD:
                 # If we weren't previously stuck, record when we got stuck
                 if self.stuck_time is None:
                     self.stuck_time = current_time
                 
-                # Check if we've been stuck for too long (3 seconds)
-                if force_check or current_time - self.stuck_time > 3.0:
-                    if current_time - self.last_replan_time > 2.0:
+                # Check if we've been stuck for too long
+                if force_check or current_time - self.stuck_time > config.STUCK_TIME_THRESHOLD:
+                    if current_time - self.last_replan_time > config.REPLAN_TIME_THRESHOLD:
                         print(f"Robot {self.id}: Stuck detected, replanning path")
                         
                         # Try to escape by temporarily moving away from target
@@ -545,8 +318,8 @@ class WarehouseRobot:
     def enforce_boundaries(self):
         """Ensure robots stay within valid environment boundaries with strong correction"""
         # More aggressive boundary enforcement to prevent escaping
-        margin = 30
-        strong_force = self.max_speed * 3.0  # Stronger force for boundary correction
+        margin = config.BOUNDARY_MARGIN
+        strong_force = self.max_speed * config.BOUNDARY_FORCE_MULTIPLIER
         
         x, y = self.body.position
         width, height = self.environment.width, self.environment.height
@@ -631,7 +404,7 @@ class WarehouseRobot:
             self.target = None
 
     def is_at_position(self, position, size):
-        # Check if robot is at a specific position
+        """Check if robot is at a specific position"""
         x, y = self.body.position
         px, py = position
         pw, ph = size
@@ -640,7 +413,7 @@ class WarehouseRobot:
                 y > py and y < py + ph)
 
     def apply_action(self, action):
-        # Apply action from learning agent
+        """Apply action from learning agent"""
         force = self.max_speed
         
         if action == 'up':
@@ -664,7 +437,7 @@ class WarehouseRobot:
             self.body.velocity = self.body.velocity * 0.8
 
     def share_knowledge(self, other_robots):
-        # Share discovered layout changes with other robots
+        """Share discovered layout changes with other robots"""
         for robot in other_robots:
             if robot.id != self.id:
                 # Share obstacle information
