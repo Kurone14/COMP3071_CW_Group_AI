@@ -34,6 +34,8 @@ class MenuHandlers:
         self.app.click_handler.set_mode("drop_point")
         self.app.canvas_view.canvas.config(cursor="crosshair")
         messagebox.showinfo("Set Drop Point", "Click on the grid to place the drop point")
+
+    
     
     def on_toggle_obstacle(self) -> None:
         """Handle toggle obstacle menu action"""

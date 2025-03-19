@@ -139,6 +139,11 @@ class WarehouseSimulation:
             delete_item_callback=self.item_manager.delete_item
         )
         
+        # Connect the controller to the simulation
+        # This step is crucial to make obstacle buttons work
+        if hasattr(gui, 'controller'):
+            gui.controller.connect_simulation(self)
+        
         # Initialize GUI with current simulation state
         gui.update_environment(self.grid, self.robots, self.items)
         
@@ -146,6 +151,56 @@ class WarehouseSimulation:
         gui.enable_controls(True)
         
         self.logger.info("GUI connected to simulation")
+
+    def toggle_obstacle(self, x: int, y: int) -> bool:
+        """
+        Toggle an obstacle at the specified position
+        
+        Args:
+            x, y: Obstacle coordinates
+            
+        Returns:
+            bool: True if obstacle was toggled successfully
+        """
+        return self.obstacle_controller.toggle_obstacle(x, y)
+
+    def add_temporary_obstacle(self, x: int, y: int, lifespan: int = 10) -> bool:
+        """
+        Add a temporary obstacle at the specified position
+        
+        Args:
+            x, y: Obstacle coordinates
+            lifespan: Obstacle lifespan in cycles
+            
+        Returns:
+            bool: True if obstacle was added successfully
+        """
+        return self.obstacle_controller.add_temporary_obstacle(x, y, lifespan)
+
+    def add_semi_permanent_obstacle(self, x: int, y: int, lifespan: int = 30) -> bool:
+        """
+        Add a semi-permanent obstacle at the specified position
+        
+        Args:
+            x, y: Obstacle coordinates
+            lifespan: Obstacle lifespan in cycles
+            
+        Returns:
+            bool: True if obstacle was added successfully
+        """
+        return self.obstacle_controller.add_semi_permanent_obstacle(x, y, lifespan)
+
+    def add_roadblock(self, x: int, y: int) -> bool:
+        """
+        Add a roadblock during simulation
+        
+        Args:
+            x, y: Roadblock coordinates
+            
+        Returns:
+            bool: True if roadblock was added successfully
+        """
+        return self.obstacle_controller.add_roadblock(x, y)
     
     def start(self) -> None:
         """Start the simulation"""
