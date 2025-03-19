@@ -46,7 +46,7 @@ class StatusPanel:
                                        font=("Arial", 12))
         self.items_left_label.pack(pady=5)
         
-        # Create entity display notebook
+        # Create entity display notebook - make it fill available space
         self._create_entity_notebook()
     
     def _create_performance_section(self) -> None:
@@ -63,8 +63,13 @@ class StatusPanel:
     
     def _create_entity_notebook(self) -> None:
         """Create the notebook with tabs for robots and items"""
-        self.notebook = ttk.Notebook(self.status_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True, pady=5)
+        # Create a frame to hold the notebook and allow it to expand
+        self.notebook_frame = tk.Frame(self.status_frame)
+        self.notebook_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # Create the notebook
+        self.notebook = ttk.Notebook(self.notebook_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
         
         # Robot display tab
         self.robot_display = RobotDisplay(self.notebook)

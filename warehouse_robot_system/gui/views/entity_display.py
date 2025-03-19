@@ -137,6 +137,26 @@ class RobotDisplay(EntityDisplay):
         super().__init__(parent)
         self.edit_button.config(text="Edit Robot")
         self.delete_button.config(text="Delete Robot")
+        
+        # Enable direct mousewheel scrolling for this canvas
+        self.canvas.unbind_all("<MouseWheel>")  # Remove global binding
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel_direct)
+        self.canvas.bind("<Enter>", self._on_enter)
+        self.canvas.bind("<Leave>", self._on_leave)
+    
+    def _on_mousewheel_direct(self, event):
+        """Direct mousewheel handler for this canvas"""
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    
+    def _on_enter(self, event):
+        """When mouse enters this canvas, bind mousewheel to scroll this canvas"""
+        # Update scrollregion to ensure scrolling works
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel_direct)
+    
+    def _on_leave(self, event):
+        """When mouse leaves this canvas, unbind mousewheel"""
+        self.canvas.unbind_all("<MouseWheel>")
     
     def setup_robot_frames(self, robots: List[Any], select_callback: Optional[Callable] = None):
         """
@@ -206,6 +226,10 @@ class RobotDisplay(EntityDisplay):
                 'steps': steps_var,
                 'location': loc_var
             }
+        
+        # Force update of the scroll region after adding all widgets
+        self.scrollable_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         
         # Reset scroll position
         self.canvas.yview_moveto(0)
@@ -287,6 +311,10 @@ class RobotDisplay(EntityDisplay):
                 # Update steps and location
                 self.entity_frames[robot.id]['steps'].set(f"Steps: {robot.steps}")
                 self.entity_frames[robot.id]['location'].set(f"Location: ({robot.x}, {robot.y})")
+        
+        # Update the scroll region after potential content changes
+        self.scrollable_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
 
 class ItemDisplay(EntityDisplay):
@@ -301,6 +329,26 @@ class ItemDisplay(EntityDisplay):
         super().__init__(parent)
         self.edit_button.config(text="Edit Item")
         self.delete_button.config(text="Delete Item")
+        
+        # Enable direct mousewheel scrolling for this canvas
+        self.canvas.unbind_all("<MouseWheel>")  # Remove global binding
+        self.canvas.bind("<MouseWheel>", self._on_mousewheel_direct)
+        self.canvas.bind("<Enter>", self._on_enter)
+        self.canvas.bind("<Leave>", self._on_leave)
+    
+    def _on_mousewheel_direct(self, event):
+        """Direct mousewheel handler for this canvas"""
+        self.canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+    
+    def _on_enter(self, event):
+        """When mouse enters this canvas, bind mousewheel to scroll this canvas"""
+        # Update scrollregion to ensure scrolling works
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel_direct)
+    
+    def _on_leave(self, event):
+        """When mouse leaves this canvas, unbind mousewheel"""
+        self.canvas.unbind_all("<MouseWheel>")
     
     def update_items_list(self, items: List[Any], select_callback: Optional[Callable] = None):
         """
@@ -367,6 +415,10 @@ class ItemDisplay(EntityDisplay):
                 frame.configure(bg='#D5F5E3')  # Light green
             elif item.assigned:
                 frame.configure(bg='#FCF3CF')  # Light yellow
+        
+        # Force update of the scroll region after adding all widgets
+        self.scrollable_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         
         # Reset scroll position
         self.canvas.yview_moveto(0)
@@ -465,3 +517,7 @@ class ItemDisplay(EntityDisplay):
                     # Only reset background if not selected
                     if self.selected_id != item.id:
                         self.entity_frames[item.id]['frame'].configure(bg=self.main_frame.cget('bg'))
+                        
+        # Update the scroll region after potential content changes
+        self.scrollable_frame.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))

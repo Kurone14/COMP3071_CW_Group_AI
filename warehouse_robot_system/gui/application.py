@@ -55,6 +55,9 @@ class WarehouseGUI:
         self.root.title("Autonomous Warehouse Robot Simulation")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         
+        # Set minimum size for the window
+        self.root.minsize(800, 600)
+        
         # Initialize component handlers - IMPORTANT: Create these before UI components
         self.selection_handler = SelectionHandler(self)
         self.click_handler = ClickHandler(self)
@@ -79,26 +82,38 @@ class WarehouseGUI:
     
     def _create_layout(self) -> None:
         """Create the main application layout"""
-        # Main container
+        # Main container with proper weight configuration
         self.main_container = tk.Frame(self.root)
         self.main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Configure row and column weights to allow proper expansion
+        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
         
         # Create menu bar
         self.menu_bar = MainMenuBar(self)
         
-        # Left panel (Canvas and Controls)
-        self.left_panel = tk.Frame(self.main_container)
-        self.left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Main content frame with horizontal layout
+        self.content_frame = tk.Frame(self.main_container)
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Initialize canvas view for grid visualization
+        # Left panel - make this expandable
+        self.left_panel = tk.Frame(self.content_frame)
+        self.left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Make sure left panel expands properly
+        self.left_panel.grid_columnconfigure(0, weight=1)
+        self.left_panel.grid_rowconfigure(0, weight=1)
+        
+        # Initialize canvas view for grid visualization with centering
         self.canvas_view = CanvasView(self.left_panel, self.width, self.height)
         
         # Create control panel
         self.control_panel = ControlPanel(self)
         
         # Right panel (Status and Entity displays)
-        self.right_panel = tk.Frame(self.main_container, width=350)
-        self.right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False, padx=10, pady=10)
+        self.right_panel = tk.Frame(self.content_frame, width=350)
+        self.right_panel.pack(side=tk.RIGHT, fill=tk.Y, expand=False, padx=5, pady=5)
         self.right_panel.pack_propagate(False)
         
         # Create status panel
@@ -221,4 +236,11 @@ class WarehouseGUI:
     
     def run(self) -> None:
         """Run the GUI application"""
+        # Set initial window size
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        initial_width = min(1024, screen_width - 100)
+        initial_height = min(768, screen_height - 100)
+        self.root.geometry(f"{initial_width}x{initial_height}")
+        
         self.root.mainloop()
