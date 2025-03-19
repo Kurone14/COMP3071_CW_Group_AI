@@ -23,24 +23,18 @@ class CanvasView:
         self.height = height
         self.cell_size = 30  # Size of each grid cell in pixels
         
-        # Create frame for canvas - this is the main container
+        # Create frame for canvas
         self.canvas_frame = tk.Frame(parent)
         self.canvas_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Calculate canvas size
-        canvas_width = width * self.cell_size
-        canvas_height = height * self.cell_size
-        
-        # Create canvas with fixed size
+        # Create canvas
         self.canvas = tk.Canvas(
             self.canvas_frame, 
-            width=canvas_width,
-            height=canvas_height,
+            width=width*self.cell_size, 
+            height=height*self.cell_size, 
             bg="white"
         )
-        
-        # Place the canvas in the center of the frame using place manager
-        self.canvas_frame.bind("<Configure>", self._center_canvas)
+        self.canvas.pack()
         
         # Selected entities
         self.selected_robot_id = None
@@ -48,21 +42,6 @@ class CanvasView:
         
         # Click handler
         self.click_handler = None
-    
-    def _center_canvas(self, event=None):
-        """Center the canvas in its parent frame"""
-        frame_width = self.canvas_frame.winfo_width()
-        frame_height = self.canvas_frame.winfo_height()
-        
-        canvas_width = self.width * self.cell_size
-        canvas_height = self.height * self.cell_size
-        
-        # Calculate position to center the canvas
-        x = max(0, (frame_width - canvas_width) // 2)
-        y = max(0, (frame_height - canvas_height) // 2)
-        
-        # Use place to position the canvas precisely
-        self.canvas.place(x=x, y=y)
     
     def set_click_handler(self, handler: Callable) -> None:
         """
@@ -292,3 +271,23 @@ class CanvasView:
                 fill="yellow",
                 font=("Arial", 6, "bold")
             )
+
+    def resize_canvas(self, width: int, height: int) -> None:
+        """
+        Resize the canvas to match new grid dimensions
+        
+        Args:
+            width: New grid width in cells
+            height: New grid height in cells
+        """
+        self.width = width
+        self.height = height
+        
+        # Update canvas size
+        self.canvas.config(
+            width=width*self.cell_size,
+            height=height*self.cell_size
+        )
+        
+        # Force redraw
+        self.canvas.update()

@@ -163,25 +163,43 @@ class Grid:
         
     def resize(self, new_width: int, new_height: int) -> bool:
         """Resize the grid, preserving existing cells"""
+        print(f"Grid.resize: Resizing from {self.width}x{self.height} to {new_width}x{new_height}")
+        
         if new_width <= 0 or new_height <= 0:
+            print("Grid.resize: Invalid dimensions")
             return False
             
         # If reducing size, check if any entities would be lost
         if new_width < self.width or new_height < self.height:
+            entities_out_of_bounds = []
             for entity_id, (x, y) in self._entity_positions.items():
                 if x >= new_width or y >= new_height:
-                    return False
+                    entities_out_of_bounds.append(entity_id)
+            
+            if entities_out_of_bounds:
+                print(f"Grid.resize: Cannot reduce size, {len(entities_out_of_bounds)} entities would be lost")
+                return False
+            
+            # Also check drop point
+            if self.drop_point and (self.drop_point[0] >= new_width or self.drop_point[1] >= new_height):
+                print("Grid.resize: Cannot reduce size, drop point would be lost")
+                return False
         
+        # Create new cell array
         new_cells = [[CellType.EMPTY for _ in range(new_width)] for _ in range(new_height)]
         
         # Copy existing cells
         for y in range(min(self.height, new_height)):
             for x in range(min(self.width, new_width)):
                 new_cells[y][x] = self.cells[y][x]
-                
+        
+        # Update the grid
+        old_cells = self.cells
         self.cells = new_cells
         self.width = new_width
         self.height = new_height
+        
+        print(f"Grid.resize: Successfully resized to {self.width}x{self.height}")
         
         return True
         

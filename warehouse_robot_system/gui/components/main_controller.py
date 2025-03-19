@@ -36,8 +36,32 @@ class MainController:
             width: New grid width
             height: New grid height
         """
-        if self.simulation and hasattr(self.simulation, 'resize_grid'):
-            self.simulation.resize_grid(width, height)
+        print(f"MainController: Resize grid request - {width}x{height}")
+        
+        if self.simulation and hasattr(self.simulation, 'grid_manager'):
+            # Use grid_manager to resize
+            result = self.simulation.grid_manager.resize_grid(width, height)
+            print(f"MainController: Grid resize result: {result}")
+            
+            # Update the GUI dimensions
+            if result:
+                # Update GUI properties
+                self.gui.width = width
+                self.gui.height = height
+                
+                # Resize the canvas
+                if hasattr(self.gui, 'canvas_view'):
+                    self.gui.canvas_view.resize_canvas(width, height)
+                
+                # Force redraw with new dimensions
+                self.gui.update_environment(
+                    self.simulation.grid,
+                    self.simulation.robots,
+                    self.simulation.items
+                )
+                print(f"MainController: Updated GUI with new grid size: {width}x{height}")
+        else:
+            print("MainController: Simulation or grid_manager not available")
     
     def set_drop_point(self, x: int, y: int) -> None:
         """
@@ -46,8 +70,8 @@ class MainController:
         Args:
             x, y: Drop point coordinates
         """
-        if self.simulation and hasattr(self.simulation, 'set_drop_point'):
-            self.simulation.set_drop_point(x, y)
+        if self.simulation and hasattr(self.simulation, 'grid_manager'):
+            self.simulation.grid_manager.set_drop_point(x, y)
     
     def toggle_obstacle(self, x: int, y: int) -> None:
         """
