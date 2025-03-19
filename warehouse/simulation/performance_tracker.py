@@ -1,0 +1,81 @@
+import time
+
+class PerformanceTracker:
+    """Tracks simulation performance metrics like time and steps"""
+    
+    def __init__(self):
+        self.start_time = None
+        self.end_time = None
+        self.is_running = False
+        
+        self.total_robot_steps = 0
+        
+        self.total_items_delivered = 0
+    
+    def start(self):
+        """Start tracking performance"""
+        self.start_time = time.time()
+        self.is_running = True
+        self.total_robot_steps = 0
+        self.total_items_delivered = 0
+    
+    def stop(self):
+        """Stop tracking performance"""
+        if self.is_running:
+            self.end_time = time.time()
+            self.is_running = False
+    
+    def reset(self):
+        """Reset all tracking data"""
+        self.start_time = None
+        self.end_time = None
+        self.is_running = False
+        self.total_robot_steps = 0
+        self.total_items_delivered = 0
+    
+    def add_steps(self, steps):
+        """Add robot steps to total"""
+        self.total_robot_steps += steps
+    
+    def add_delivered_items(self, count=1):
+        """Add delivered items to total"""
+        self.total_items_delivered += count
+    
+    def get_elapsed_time(self):
+        """Get elapsed time in seconds"""
+        if not self.start_time:
+            return 0
+        
+        if self.is_running:
+            return time.time() - self.start_time
+        else:
+            return self.end_time - self.start_time if self.end_time else 0
+    
+    def get_statistics(self):
+        """Get all performance statistics"""
+        elapsed_time = self.get_elapsed_time()
+        
+        return {
+            "elapsed_time": elapsed_time,
+            "total_robot_steps": self.total_robot_steps,
+            "total_items_delivered": self.total_items_delivered,
+            "steps_per_second": self.total_robot_steps / elapsed_time if elapsed_time > 0 else 0,
+            "items_per_minute": (self.total_items_delivered / elapsed_time) * 60 if elapsed_time > 0 else 0,
+            "steps_per_item": self.total_robot_steps / self.total_items_delivered if self.total_items_delivered > 0 else 0
+        }
+    
+    def format_statistics(self):
+        """Format statistics for display"""
+        stats = self.get_statistics()
+        
+        minutes = int(stats["elapsed_time"] // 60)
+        seconds = int(stats["elapsed_time"] % 60)
+        formatted_time = f"{minutes:02d}:{seconds:02d}"
+        
+        return [
+            f"Time: {formatted_time}",
+            f"Total steps: {stats['total_robot_steps']}",
+            f"Items delivered: {stats['total_items_delivered']}",
+            f"Steps/item: {stats['steps_per_item']:.1f}",
+            f"Items/minute: {stats['items_per_minute']:.1f}"
+        ]
