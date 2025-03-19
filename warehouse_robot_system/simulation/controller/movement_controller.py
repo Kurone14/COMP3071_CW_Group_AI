@@ -137,23 +137,44 @@ class MovementController:
             # Robot is not stuck, reset stuck time
             self.robot_stuck_time[robot.id] = 0
             
+            # Get next position
+            next_y, next_x = robot.path[0]
+            
+            # Check if next position is an obstacle that hasn't expired
+            cell_type = self.grid.get_cell(next_x, next_y)
+            if cell_type in [CellType.PERMANENT_OBSTACLE, CellType.TEMPORARY_OBSTACLE, CellType.SEMI_PERMANENT_OBSTACLE]:
+                # Do not move through obstacles, even temporary ones
+                # Increase stuck time
+                self.robot_stuck_time[robot.id] = self.robot_stuck_time.get(robot.id, 0) + 1
+                
+                # If obstacle is temporary and almost expired, consider waiting
+                if self.obstacle_manager and cell_type == CellType.TEMPORARY_OBSTACLE:
+                    lifespan = self.obstacle_manager.get_obstacle_remaining_lifespan(next_x, next_y)
+                    if lifespan > 0 and lifespan <= 5:
+                        # Start waiting for obstacle to clear
+                        self.robot_waiting[robot.id] = {
+                            'x': next_x,
+                            'y': next_y,
+                            'current': lifespan,
+                            'total': lifespan
+                        }
+                        print(f"Robot {robot.id} waiting for temporary obstacle at ({next_x}, {next_y}) to clear in {lifespan} cycles")
+                continue
+            
             # Move the robot
             old_x, old_y = robot.x, robot.y
             self.grid.set_cell(old_x, old_y, CellType.EMPTY)
             
-            next_y, next_x = robot.path.pop(0)
-            
-            # Register robot successfully navigating to this position
-            if self.obstacle_manager:
-                cell_type = self.grid.get_cell(next_x, next_y)
-                if cell_type in [CellType.TEMPORARY_OBSTACLE, CellType.SEMI_PERMANENT_OBSTACLE]:
-                    self.obstacle_manager.register_robot_interaction(robot.id, next_x, next_y, True)
-            
+            robot.path.pop(0)
             robot.x, robot.y = next_x, next_y
             robot.steps += 1
             total_steps_taken += 1
             
             self.grid.set_cell(next_x, next_y, CellType.ROBOT)
+            
+            # Register robot successfully navigating to this position
+            if self.obstacle_manager:
+                self.obstacle_manager.register_robot_interaction(robot.id, next_x, next_y, True)
             
             # Check if robot has reached an item
             self._check_item_pickup(robot, progress_callback)

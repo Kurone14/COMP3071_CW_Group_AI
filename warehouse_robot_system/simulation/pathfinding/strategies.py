@@ -32,12 +32,12 @@ class AStarStrategy(PathStrategy):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
     
     def find_path(self, 
-                 start: Tuple[int, int], 
-                 goal: Tuple[int, int], 
-                 grid: Grid,
-                 obstacle_manager=None,
-                 robot_id: Optional[int] = None,
-                 carrying_weight: int = 0) -> List[Tuple[int, int]]:
+             start: Tuple[int, int], 
+             goal: Tuple[int, int], 
+             grid: Grid,
+             obstacle_manager=None,
+             robot_id: Optional[int] = None,
+             carrying_weight: int = 0) -> List[Tuple[int, int]]:
         """
         Find a path using A* algorithm
         
@@ -62,8 +62,8 @@ class AStarStrategy(PathStrategy):
             
             # Consider obstacle types if obstacle manager is available
             if obstacle_manager and cell_type in [CellType.PERMANENT_OBSTACLE, 
-                                                 CellType.TEMPORARY_OBSTACLE, 
-                                                 CellType.SEMI_PERMANENT_OBSTACLE]:
+                                                CellType.TEMPORARY_OBSTACLE, 
+                                                CellType.SEMI_PERMANENT_OBSTACLE]:
                 # Permanent obstacles are never walkable
                 if cell_type == CellType.PERMANENT_OBSTACLE:
                     return False
@@ -71,9 +71,12 @@ class AStarStrategy(PathStrategy):
                 # For temporary obstacles, decide based on remaining lifespan
                 if cell_type == CellType.TEMPORARY_OBSTACLE:
                     lifespan = obstacle_manager.get_obstacle_remaining_lifespan(x, y)
-                    # If lifespan is very short, we might consider waiting
-                    if lifespan <= 3:
-                        return True  # Consider as walkable if it will disappear soon
+                    # Only consider it walkable for path planning if it will disappear very soon
+                    # This is different from actual movement - robots won't move through obstacles 
+                    # until they're completely gone
+                    if lifespan <= 2:  # Very short lifespan for planning purposes
+                        return True
+                    return False
                 
                 # Semi-permanent obstacles are treated as non-walkable but with lower cost penalty
                 if cell_type == CellType.SEMI_PERMANENT_OBSTACLE:
@@ -110,7 +113,7 @@ class AStarStrategy(PathStrategy):
                 if cell_type == CellType.TEMPORARY_OBSTACLE:
                     # Temporary obstacles have reduced cost penalty
                     lifespan = obstacle_manager.get_obstacle_remaining_lifespan(x, y)
-                    if lifespan <= 3:
+                    if lifespan <= 2:
                         # Very short lifespan, small penalty
                         return base_cost * weight_factor * 1.5
                     else:

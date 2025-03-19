@@ -43,7 +43,8 @@ class Grid:
         
         Args:
             x, y: Coordinates
-            include_temporary: If True, temporary obstacles are considered walkable
+            include_temporary: If True, temporary obstacles are considered walkable,
+                            but this should ONLY be used for path planning, not for actual movement
         """
         if not self.in_bounds(x, y):
             return False
@@ -53,6 +54,8 @@ class Grid:
         if cell_type == CellType.EMPTY or cell_type == CellType.DROP_POINT:
             return True
             
+        # This parameter should only be used for path planning with future knowledge,
+        # not for determining if a robot can actually move through now
         if include_temporary and cell_type == CellType.TEMPORARY_OBSTACLE:
             return True
             
