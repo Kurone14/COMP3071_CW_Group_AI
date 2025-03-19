@@ -63,5 +63,4 @@ htmlcov/
 output/
 
 # Model folder
-models/
-performance_report.png
+results/
