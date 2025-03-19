@@ -55,9 +55,6 @@ class WarehouseGUI:
         self.root.title("Autonomous Warehouse Robot Simulation")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         
-        # Set minimum size for the window
-        self.root.minsize(800, 600)
-        
         # Initialize component handlers - IMPORTANT: Create these before UI components
         self.selection_handler = SelectionHandler(self)
         self.click_handler = ClickHandler(self)
@@ -82,38 +79,26 @@ class WarehouseGUI:
     
     def _create_layout(self) -> None:
         """Create the main application layout"""
-        # Main container with proper weight configuration
+        # Main container
         self.main_container = tk.Frame(self.root)
         self.main_container.pack(fill=tk.BOTH, expand=True)
-        
-        # Configure row and column weights to allow proper expansion
-        self.main_container.grid_columnconfigure(0, weight=1)
-        self.main_container.grid_rowconfigure(0, weight=1)
         
         # Create menu bar
         self.menu_bar = MainMenuBar(self)
         
-        # Main content frame with horizontal layout
-        self.content_frame = tk.Frame(self.main_container)
-        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # Left panel (Canvas and Controls)
+        self.left_panel = tk.Frame(self.main_container)
+        self.left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Left panel - make this expandable
-        self.left_panel = tk.Frame(self.content_frame)
-        self.left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Make sure left panel expands properly
-        self.left_panel.grid_columnconfigure(0, weight=1)
-        self.left_panel.grid_rowconfigure(0, weight=1)
-        
-        # Initialize canvas view for grid visualization with centering
+        # Initialize canvas view for grid visualization
         self.canvas_view = CanvasView(self.left_panel, self.width, self.height)
         
         # Create control panel
         self.control_panel = ControlPanel(self)
         
         # Right panel (Status and Entity displays)
-        self.right_panel = tk.Frame(self.content_frame, width=350)
-        self.right_panel.pack(side=tk.RIGHT, fill=tk.Y, expand=False, padx=5, pady=5)
+        self.right_panel = tk.Frame(self.main_container, width=350)
+        self.right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False, padx=10, pady=10)
         self.right_panel.pack_propagate(False)
         
         # Create status panel
@@ -143,17 +128,14 @@ class WarehouseGUI:
         self.reset_callback = reset_callback
         self.add_robot_callback = add_robot_callback
         self.add_item_callback = add_item_callback
+        self.edit_robot_callback = edit_robot_callback
+        self.delete_robot_callback = delete_robot_callback
+        self.edit_item_callback = edit_item_callback
+        self.delete_item_callback = delete_item_callback
         
-        # Set up robot and item action callbacks
-        self.status_panel.set_robot_action_callbacks(
-            lambda: edit_robot_callback(self.selected_robot_id),
-            lambda: delete_robot_callback(self.selected_robot_id)
-        )
-        
-        self.status_panel.set_item_action_callbacks(
-            lambda: edit_item_callback(self.selected_item_id),
-            lambda: delete_item_callback(self.selected_item_id)
-        )
+        # Set up robot and item action callbacks - FIXED: properly capture and pass callbacks
+        self.status_panel.set_robot_action_callbacks(edit_robot_callback, delete_robot_callback)
+        self.status_panel.set_item_action_callbacks(edit_item_callback, delete_item_callback)
         
         # Set canvas click handler
         self.canvas_view.set_click_handler(self.click_handler.on_canvas_click)

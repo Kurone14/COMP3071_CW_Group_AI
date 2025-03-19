@@ -12,6 +12,7 @@ from core.models.robot import Robot
 from core.models.item import Item
 from gui.panels.obstacle_legend import ObstacleLegend
 from gui.views.entity_display import RobotDisplay, ItemDisplay
+from gui.components.dialogs import RobotEditDialog, ItemEditDialog
 
 
 class StatusPanel:
@@ -46,8 +47,14 @@ class StatusPanel:
                                        font=("Arial", 12))
         self.items_left_label.pack(pady=5)
         
-        # Create entity display notebook - make it fill available space
+        # Create entity display notebook
         self._create_entity_notebook()
+        
+        # Store edit/delete callback functions
+        self.edit_robot_callback = None
+        self.delete_robot_callback = None
+        self.edit_item_callback = None
+        self.delete_item_callback = None
     
     def _create_performance_section(self) -> None:
         """Create the performance metrics section"""
@@ -63,13 +70,8 @@ class StatusPanel:
     
     def _create_entity_notebook(self) -> None:
         """Create the notebook with tabs for robots and items"""
-        # Create a frame to hold the notebook and allow it to expand
-        self.notebook_frame = tk.Frame(self.status_frame)
-        self.notebook_frame.pack(fill=tk.BOTH, expand=True, pady=5)
-        
-        # Create the notebook
-        self.notebook = ttk.Notebook(self.notebook_frame)
-        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self.notebook = ttk.Notebook(self.status_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True, pady=5)
         
         # Robot display tab
         self.robot_display = RobotDisplay(self.notebook)
@@ -93,7 +95,14 @@ class StatusPanel:
             edit_callback: Function to call when edit button is clicked
             delete_callback: Function to call when delete button is clicked
         """
-        self.robot_display.set_action_buttons(edit_callback, delete_callback)
+        self.edit_robot_callback = edit_callback
+        self.delete_robot_callback = delete_callback
+        
+        # Fix: Set up button callbacks with dialog handling
+        self.robot_display.set_action_buttons(
+            lambda: self._on_edit_robot(),
+            lambda: self._on_delete_robot()
+        )
     
     def set_item_action_callbacks(self, edit_callback: Callable, delete_callback: Callable) -> None:
         """
@@ -103,7 +112,60 @@ class StatusPanel:
             edit_callback: Function to call when edit button is clicked
             delete_callback: Function to call when delete button is clicked
         """
-        self.item_display.set_action_buttons(edit_callback, delete_callback)
+        self.edit_item_callback = edit_callback
+        self.delete_item_callback = delete_callback
+        
+        # Fix: Set up button callbacks with dialog handling
+        self.item_display.set_action_buttons(
+            lambda: self._on_edit_item(),
+            lambda: self._on_delete_item()
+        )
+    
+    def _on_edit_robot(self) -> None:
+        """Handle edit robot button click with proper dialog and parameters"""
+        if self.robot_display.selected_id is not None:
+            # Find selected robot
+            robot_id = self.robot_display.selected_id
+            selected_robot = None
+            for robot in self.app.robots:
+                if robot.id == robot_id:
+                    selected_robot = robot
+                    break
+            
+            if selected_robot and self.edit_robot_callback:
+                # Use the edit dialog to get parameters
+                result = RobotEditDialog.show_dialog(self.app.root, selected_robot)
+                if not result["cancelled"]:
+                    # Call edit_robot with all required parameters
+                    self.edit_robot_callback(robot_id, result["x"], result["y"], result["capacity"])
+    
+    def _on_delete_robot(self) -> None:
+        """Handle delete robot button click"""
+        if self.robot_display.selected_id is not None and self.delete_robot_callback:
+            self.delete_robot_callback(self.robot_display.selected_id)
+    
+    def _on_edit_item(self) -> None:
+        """Handle edit item button click with proper dialog and parameters"""
+        if self.item_display.selected_id is not None:
+            # Find selected item
+            item_id = self.item_display.selected_id
+            selected_item = None
+            for item in self.app.items:
+                if item.id == item_id:
+                    selected_item = item
+                    break
+            
+            if selected_item and self.edit_item_callback:
+                # Use the edit dialog to get parameters
+                result = ItemEditDialog.show_dialog(self.app.root, selected_item)
+                if not result["cancelled"]:
+                    # Call edit_item with all required parameters
+                    self.edit_item_callback(item_id, result["x"], result["y"], result["weight"])
+    
+    def _on_delete_item(self) -> None:
+        """Handle delete item button click"""
+        if self.item_display.selected_id is not None and self.delete_item_callback:
+            self.delete_item_callback(self.item_display.selected_id)
     
     def update(self, grid: Grid, robots: List[Robot], items: List[Item]) -> None:
         """
