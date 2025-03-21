@@ -82,7 +82,7 @@ class ControlPanel:
         self.perm_obstacle_button.pack(side=tk.LEFT, padx=2)
     
     def _create_entity_controls(self) -> None:
-        """Create entity control buttons (add robot, add item, roadblock)"""
+        """Create entity control buttons (add robot, add item, randomize layout)"""
         self.entity_controls = tk.Frame(self.control_frame)
         self.entity_controls.pack(side=tk.RIGHT)
         
@@ -91,13 +91,16 @@ class ControlPanel:
         self.add_robot_button.pack(side=tk.LEFT, padx=5)
         
         self.add_item_button = tk.Button(self.entity_controls, text="Add Item", 
-                                       command=self._on_add_item_click)
+                                    command=self._on_add_item_click)
         self.add_item_button.pack(side=tk.LEFT, padx=5)
         
-        self.roadblock_button = tk.Button(self.entity_controls, text="Add Roadblock", 
-                                        command=self._on_add_roadblock_click)
-        self.roadblock_button.pack(side=tk.LEFT, padx=5)
-        self.roadblock_button.config(state=tk.DISABLED)  # Initially disabled
+        self.randomize_layout_button = tk.Button(self.entity_controls, text="Randomize Layout", 
+                                            command=self._on_randomize_layout_click,
+                                            background="#4287f5",  # Blue background
+                                            foreground="white")
+        self.randomize_layout_button.pack(side=tk.LEFT, padx=5)
+        # Initially enabled (replaces disabled roadblock button)
+        self.randomize_layout_button.config(state=tk.NORMAL)
     
     def enable_controls(self, enable: bool = True) -> None:
         """
@@ -116,11 +119,12 @@ class ControlPanel:
             self.semi_perm_obstacle_button.config(state=state)
             self.perm_obstacle_button.config(state=state)
         
-        # Roadblock button is opposite (enabled during simulation, disabled during setup)
+        # Randomize layout button has opposite behavior - always enabled
+        # but we switch between "Randomize Layout" and "Reset Layout" based on simulation state
         if enable:
-            self.roadblock_button.config(state=tk.DISABLED)
+            self.randomize_layout_button.config(text="Randomize Layout")
         else:
-            self.roadblock_button.config(state=tk.NORMAL)
+            self.randomize_layout_button.config(text="Reset Layout")
     
     # Button event handlers
     def _on_start_click(self) -> None:
@@ -186,3 +190,13 @@ class ControlPanel:
             button.config(relief=tk.SUNKEN)
             self.app.canvas_view.canvas.config(cursor="plus")
             self.app.root.bind("<Escape>", lambda e: self.app.click_handler.exit_mode())
+
+    def _on_randomize_layout_click(self) -> None:
+        """Handle randomize layout button click"""
+        from tkinter import messagebox
+        
+        if messagebox.askyesno("Randomize Layout", 
+                            "This will completely reset the simulation with a new random layout.\n\n" +
+                            "Are you sure you want to continue?"):
+            if hasattr(self.app.controller, "randomize_layout"):
+                self.app.controller.randomize_layout()

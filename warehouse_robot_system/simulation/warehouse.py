@@ -21,6 +21,7 @@ from simulation.manager.grid_manager import GridManager
 from simulation.obstacles.obstacle_controller import ObstacleController
 from simulation.controller.step_executor import StepExecutor
 from simulation.controller.stall_handler import StallHandler
+from simulation.obstacles.random_layout_generator import RandomLayoutGenerator
 
 
 class WarehouseSimulation:
@@ -201,6 +202,103 @@ class WarehouseSimulation:
             bool: True if roadblock was added successfully
         """
         return self.obstacle_controller.add_roadblock(x, y)
+    
+    def randomize_layout(self, robot_count: int = None, item_count: int = None, obstacle_density: float = 0.08) -> None:
+        """
+        Reset the simulation with a completely random layout
+        
+        Args:
+            robot_count: Number of robots to place (default: use current count)
+            item_count: Number of items to place (default: use current count)
+            obstacle_density: Density of obstacles (0.0 to 1.0)
+        """
+        
+        # Use current counts if not specified
+        if robot_count is None:
+            robot_count = len(self.robots)
+        if item_count is None:
+            item_count = len(self.items)
+        
+        # Stop simulation if running
+        was_running = self.running
+        if was_running:
+            self.running = False
+            self.paused = False
+        
+        # Clear performance tracking
+        if self.performance_tracker:
+            self.performance_tracker.reset()
+        
+        # Generate new random layout
+        self.logger.info(f"Generating random layout with {robot_count} robots, " +
+                        f"{item_count} items, {obstacle_density:.2f} obstacle density")
+        
+        # Generate new layout
+        grid, robot_positions, item_positions = RandomLayoutGenerator.generate_layout(
+            self.grid, robot_count, item_count, obstacle_density
+        )
+        
+        # Clear existing robots and items
+        self.robots = []
+        self.items = []
+        self.robot_start_positions = {}
+        
+        # Create robots at new positions
+        for i, (x, y) in enumerate(robot_positions):
+            # Create robot with some capacity variation
+            capacity = 10 + (i * 2) % 6
+            robot = Robot(i, x, y, capacity)
+            
+            # Register robot in tracking
+            self.robots.append(robot)
+            self.robot_start_positions[i] = (x, y)
+            
+            self.logger.info(f"Created robot {i} at ({x}, {y}) with capacity {capacity}")
+        
+        # Create items at new positions
+        for i, (x, y, weight) in enumerate(item_positions):
+            item = Item(i, x, y, weight)
+            self.items.append(item)
+            
+            self.logger.info(f"Created item {i} at ({x}, {y}) with weight {weight}")
+        
+        # Refresh obstacle manager if available
+        if self.obstacle_manager:
+            self.obstacle_manager._initialize_from_grid()
+        
+        # Update all components with new grid
+        if self.path_finder:
+            self.path_finder.grid = self.grid
+        if self.item_assigner:
+            self.item_assigner.grid = self.grid
+        if self.movement_controller:
+            self.movement_controller.grid = self.grid
+        if self.stall_detector:
+            self.stall_detector.grid = self.grid
+        
+        # Update GUI if connected
+        if self.gui:
+            self.gui.width = self.grid.width
+            self.gui.height = self.grid.height
+            
+            if hasattr(self.gui, 'canvas_view') and hasattr(self.gui.canvas_view, 'resize_canvas'):
+                self.gui.canvas_view.resize_canvas(self.grid.width, self.grid.height)
+                
+            self.gui.update_environment(self.grid, self.robots, self.items)
+            
+            # Reset GUI state
+            if hasattr(self.gui, 'event_handler'):
+                self.gui.event_handler.on_simulation_reset()
+        
+        # Publish reset event
+        from core.utils.event_system import publish, EventType
+        publish(EventType.SIMULATION_RESET, {
+            'robots': self.robots,
+            'items': self.items,
+            'grid': self.grid
+        })
+        
+        self.logger.info("Layout randomized successfully")
     
     def start(self) -> None:
         """Start the simulation"""

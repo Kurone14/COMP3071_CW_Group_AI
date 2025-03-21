@@ -114,3 +114,22 @@ class MainController:
         """
         if self.simulation and hasattr(self.simulation, 'add_roadblock'):
             self.simulation.add_roadblock(x, y)
+
+    def randomize_layout(self) -> None:
+        """
+        Randomize the simulation layout
+        """
+        if self.simulation and hasattr(self.simulation, 'randomize_layout'):
+            # Default values for randomization
+            obstacle_density = 0.08
+            
+            # Use current counts by default
+            robot_count = len(self.simulation.robots) if hasattr(self.simulation, 'robots') else 4
+            item_count = len(self.simulation.items) if hasattr(self.simulation, 'items') else 10
+            
+            print(f"MainController: Randomizing layout with {robot_count} robots, " +
+                f"{item_count} items, {obstacle_density:.2f} obstacle density")
+            
+            self.simulation.randomize_layout(robot_count, item_count, obstacle_density)
+        else:
+            print("MainController: Simulation or randomize_layout not available")
