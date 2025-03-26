@@ -88,24 +88,17 @@ class ClickHandler:
             self.exit_mode()
             
         elif self.mode == "obstacle" and hasattr(self.app.controller, "toggle_obstacle"):
+            # Allow adding obstacles during runtime
             self.app.controller.toggle_obstacle(x, y)
             
         elif self.mode == "temp_obstacle" and hasattr(self.app.controller, "add_temporary_obstacle"):
+            # Allow adding temporary obstacles during runtime
             self.app.controller.add_temporary_obstacle(x, y)
             
         elif self.mode == "semi_perm_obstacle" and hasattr(self.app.controller, "add_semi_permanent_obstacle"):
+            # Allow adding semi-permanent obstacles during runtime
             self.app.controller.add_semi_permanent_obstacle(x, y)
-    
-    def _handle_add_robot(self, x: int, y: int) -> None:
-        """
-        Handle adding a robot at specified coordinates
-        
-        Args:
-            x, y: Grid coordinates
-        """
-        self.app.add_robot_callback(x, y)
-        self.exit_mode()
-    
+
     def _handle_add_item(self, x: int, y: int) -> None:
         """
         Handle adding an item at specified coordinates
@@ -117,5 +110,19 @@ class ClickHandler:
         weight = simpledialog.askinteger("Item Weight", "Enter item weight (kg):", 
                                         minvalue=1, maxvalue=10)
         if weight:
+            # Add item even during runtime
             self.app.add_item_callback(x, y, weight)
-            self.exit_mode()
+            
+            # Don't exit mode to allow adding multiple items
+            if not self.app.running:
+                self.exit_mode()
+    
+    def _handle_add_robot(self, x: int, y: int) -> None:
+        """
+        Handle adding a robot at specified coordinates
+        
+        Args:
+            x, y: Grid coordinates
+        """
+        self.app.add_robot_callback(x, y)
+        self.exit_mode()

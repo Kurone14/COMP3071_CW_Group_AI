@@ -262,9 +262,30 @@ class WarehouseSimulation:
             
             self.logger.info(f"Created item {i} at ({x}, {y}) with weight {weight}")
         
-        # Refresh obstacle manager if available
+        # Configure obstacle manager if available
         if self.obstacle_manager:
-            self.obstacle_manager._initialize_from_grid()
+            # Reset obstacles in obstacle manager
+            self.obstacle_manager.obstacles = {}
+            
+            # Register all obstacles in the grid with the obstacle manager
+            for y in range(self.grid.height):
+                for x in range(self.grid.width):
+                    cell_type = self.grid.get_cell(x, y)
+                    
+                    if cell_type == CellType.PERMANENT_OBSTACLE:
+                        self.obstacle_manager.add_obstacle(x, y, 
+                                                        obstacle_type=CellType.PERMANENT_OBSTACLE, 
+                                                        lifespan=-1)
+                    elif cell_type == CellType.SEMI_PERMANENT_OBSTACLE:
+                        lifespan = random.randint(25, 35)
+                        self.obstacle_manager.add_obstacle(x, y, 
+                                                        obstacle_type=CellType.SEMI_PERMANENT_OBSTACLE, 
+                                                        lifespan=lifespan)
+                    elif cell_type == CellType.TEMPORARY_OBSTACLE:
+                        lifespan = random.randint(8, 12)
+                        self.obstacle_manager.add_obstacle(x, y, 
+                                                        obstacle_type=CellType.TEMPORARY_OBSTACLE, 
+                                                        lifespan=lifespan)
         
         # Update all components with new grid
         if self.path_finder:

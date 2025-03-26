@@ -101,7 +101,7 @@ class ControlPanel:
         self.randomize_layout_button.pack(side=tk.LEFT, padx=5)
         # Initially enabled (replaces disabled roadblock button)
         self.randomize_layout_button.config(state=tk.NORMAL)
-    
+
     def enable_controls(self, enable: bool = True) -> None:
         """
         Enable or disable entity control buttons
@@ -111,13 +111,16 @@ class ControlPanel:
         """
         state = tk.NORMAL if enable else tk.DISABLED
         self.add_robot_button.config(state=state)
-        self.add_item_button.config(state=state)
+        
+        # Always keep add item enabled, even during simulation
+        # This allows runtime adding of items
+        self.add_item_button.config(state=tk.NORMAL)
         
         # Enable/disable obstacle type buttons if they exist
         if hasattr(self, 'temp_obstacle_button'):
-            self.temp_obstacle_button.config(state=state)
-            self.semi_perm_obstacle_button.config(state=state)
-            self.perm_obstacle_button.config(state=state)
+            self.temp_obstacle_button.config(state=tk.NORMAL)
+            self.semi_perm_obstacle_button.config(state=tk.NORMAL)
+            self.perm_obstacle_button.config(state=tk.NORMAL)
         
         # Randomize layout button has opposite behavior - always enabled
         # but we switch between "Randomize Layout" and "Reset Layout" based on simulation state
@@ -190,6 +193,52 @@ class ControlPanel:
             button.config(relief=tk.SUNKEN)
             self.app.canvas_view.canvas.config(cursor="plus")
             self.app.root.bind("<Escape>", lambda e: self.app.click_handler.exit_mode())
+
+    def _on_add_obstacle_click(self) -> None:
+        """Handle add obstacle button click"""
+        from tkinter import messagebox
+        
+        # Create a simple dialog to select obstacle type
+        obstacle_dialog = tk.Toplevel(self.add_obstacle_button)
+        obstacle_dialog.title("Add Obstacle")
+        obstacle_dialog.geometry("300x150")
+        obstacle_dialog.transient(self.add_obstacle_button)
+        obstacle_dialog.grab_set()
+        
+        tk.Label(obstacle_dialog, text="Select Obstacle Type", font=("Arial", 12, "bold")).pack(pady=10)
+        
+        def on_perm_click():
+            obstacle_dialog.destroy()
+            self.app.click_handler.set_mode("obstacle", self.add_obstacle_button)
+            self.app.canvas_view.canvas.config(cursor="crosshair")
+            messagebox.showinfo("Add Permanent Obstacle", "Click on the grid to place a permanent obstacle")
+            self.app.root.bind("<Escape>", lambda e: self.app.click_handler.exit_mode())
+        
+        def on_semi_click():
+            obstacle_dialog.destroy()
+            self.app.click_handler.set_mode("semi_perm_obstacle", self.add_obstacle_button)
+            self.app.canvas_view.canvas.config(cursor="crosshair")
+            messagebox.showinfo("Add Semi-Permanent Obstacle", "Click on the grid to place a semi-permanent obstacle")
+            self.app.root.bind("<Escape>", lambda e: self.app.click_handler.exit_mode())
+        
+        def on_temp_click():
+            obstacle_dialog.destroy()
+            self.app.click_handler.set_mode("temp_obstacle", self.add_obstacle_button)
+            self.app.canvas_view.canvas.config(cursor="crosshair")
+            messagebox.showinfo("Add Temporary Obstacle", "Click on the grid to place a temporary obstacle")
+            self.app.root.bind("<Escape>", lambda e: self.app.click_handler.exit_mode())
+        
+        button_frame = tk.Frame(obstacle_dialog)
+        button_frame.pack(fill=tk.X, pady=10)
+        
+        permanent_btn = tk.Button(button_frame, text="Permanent", bg="gray", fg="white", command=on_perm_click)
+        permanent_btn.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        semi_btn = tk.Button(button_frame, text="Semi-Permanent", bg="#8B4513", fg="white", command=on_semi_click)
+        semi_btn.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
+        temp_btn = tk.Button(button_frame, text="Temporary", bg="#FFA500", fg="white", command=on_temp_click)
+        temp_btn.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
     def _on_randomize_layout_click(self) -> None:
         """Handle randomize layout button click"""

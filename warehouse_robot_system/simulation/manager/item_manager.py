@@ -74,7 +74,7 @@ class ItemManager:
     
     def add_item(self, x: int, y: int, weight: Optional[int] = None) -> bool:
         """
-        Add a new item at specified position
+        Add a new item at specified position - even during runtime
         
         Args:
             x, y: Position coordinates
@@ -114,8 +114,55 @@ class ItemManager:
         # Update GUI if connected
         if self.simulation.gui:
             self.simulation.gui.update_environment(grid, self.simulation.robots, self.simulation.items)
+            
+        # If simulation is running, try to assign this item to an available robot
+        if self.simulation.running and self.simulation.item_assigner:
+            self._try_immediate_assignment(item)
         
         return True
+        
+    def _try_immediate_assignment(self, item: Item) -> None:
+        """
+        Try to immediately assign a newly added item to an available robot
+        
+        Args:
+            item: The newly added item
+        """
+        # Only try if the simulation has an item assigner
+        if not hasattr(self.simulation, 'item_assigner'):
+            return
+            
+        # Find an idle robot that can handle this item's weight
+        idle_robots = [robot for robot in self.simulation.robots 
+                    if not robot.path and not robot.carrying_items and robot.capacity >= item.weight]
+                    
+        if not idle_robots:
+            self.simulation.logger.info(f"No idle robots available to assign to new item {item.id}")
+            return
+            
+        # Sort robots by distance to item
+        idle_robots.sort(key=lambda r: abs(r.x - item.x) + abs(r.y - item.y))
+        
+        # Try to assign to closest robot
+        closest_robot = idle_robots[0]
+        
+        # Calculate path
+        path = self.simulation.path_finder.find_path(
+            (closest_robot.y, closest_robot.x),
+            (item.y, item.x),
+            self.simulation.robots,
+            closest_robot.id
+        )
+        
+        if path:
+            # Assign item to robot
+            item.assigned = True
+            closest_robot.target_items = [item]
+            closest_robot.path = path
+            
+            self.simulation.logger.info(f"Assigned new item {item.id} to robot {closest_robot.id}")
+        else:
+            self.simulation.logger.warning(f"Could not find path from robot {closest_robot.id} to new item {item.id}")
     
     def edit_item(self, item_id: int, new_x: int, new_y: int, new_weight: int) -> bool:
         """

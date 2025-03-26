@@ -90,9 +90,19 @@ class RandomLayoutGenerator:
         # Get drop point to avoid blocking it
         drop_point = grid.drop_point
         
+        # Calculate distribution of obstacle types
+        # 40% temporary, 30% semi-permanent, 30% permanent
+        temp_count = int(obstacle_count * 0.4)
+        semi_perm_count = int(obstacle_count * 0.3)
+        perm_count = obstacle_count - temp_count - semi_perm_count
+        
+        # Track placed obstacles
+        placed_perm = 0
+        placed_semi = 0
+        placed_temp = 0
+        
         # Place obstacles
-        placed = 0
-        while placed < obstacle_count:
+        while (placed_perm + placed_semi + placed_temp) < obstacle_count:
             x = random.randint(0, width - 1)
             y = random.randint(0, height - 1)
             
@@ -104,15 +114,29 @@ class RandomLayoutGenerator:
             if grid.get_cell(x, y) != CellType.EMPTY:
                 continue
             
-            # Place obstacle
-            grid.set_cell(x, y, CellType.PERMANENT_OBSTACLE)
-            placed += 1
-            
+            # Determine obstacle type to place
+            if placed_perm < perm_count:
+                grid.set_cell(x, y, CellType.PERMANENT_OBSTACLE)
+                placed_perm += 1
+            elif placed_semi < semi_perm_count:
+                grid.set_cell(x, y, CellType.SEMI_PERMANENT_OBSTACLE)
+                placed_semi += 1
+            else:
+                grid.set_cell(x, y, CellType.TEMPORARY_OBSTACLE)
+                placed_temp += 1
+                
             # Check path exists from bottom to top
-            if placed % 5 == 0 and not RandomLayoutGenerator._verify_path(grid):
+            if (placed_perm + placed_semi + placed_temp) % 5 == 0 and not RandomLayoutGenerator._verify_path(grid):
                 # Remove last obstacle if it blocks all paths
                 grid.set_cell(x, y, CellType.EMPTY)
-                placed -= 1
+                
+                # Decrement the appropriate counter
+                if placed_temp > 0:
+                    placed_temp -= 1
+                elif placed_semi > 0:
+                    placed_semi -= 1
+                elif placed_perm > 0:
+                    placed_perm -= 1
     
     @staticmethod
     def _verify_path(grid: Grid) -> bool:

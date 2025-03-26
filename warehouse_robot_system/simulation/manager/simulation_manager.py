@@ -3,6 +3,7 @@ Manages the simulation lifecycle (start, pause, resume, etc.)
 """
 
 import time
+import tkinter as tk  # Add this import for tk.NORMAL
 from core.utils.event_system import publish, EventType
 
 
@@ -82,6 +83,15 @@ class SimulationManager:
                     
             if not self.simulation.paused:
                 self.simulation.gui.schedule_next_step(self.simulation.simulation_step)
+                
+            # When paused, enable obstacle and item controls to allow additions
+            if self.simulation.paused:
+                if hasattr(self.simulation.gui, 'control_panel'):
+                    # Enable add obstacle and item buttons during pause
+                    if hasattr(self.simulation.gui.control_panel, 'add_obstacle_button'):
+                        self.simulation.gui.control_panel.add_obstacle_button.config(state=tk.NORMAL)
+                    if hasattr(self.simulation.gui.control_panel, 'add_item_button'):
+                        self.simulation.gui.control_panel.add_item_button.config(state=tk.NORMAL)
     
     def run_headless(self) -> None:
         """Run the simulation without GUI (for testing)"""

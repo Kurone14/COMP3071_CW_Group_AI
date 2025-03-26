@@ -37,7 +37,7 @@ class ObstacleController:
         cell_type = grid.get_cell(x, y)
         
         if cell_type == CellType.EMPTY:
-            # Add obstacle
+            # Add obstacle - even during runtime
             grid.set_cell(x, y, CellType.PERMANENT_OBSTACLE)
             
             # Register with obstacle manager if available
@@ -46,6 +46,10 @@ class ObstacleController:
                 
             self.simulation.logger.info(f"Added obstacle at ({x},{y})")
             
+            # If simulation is running, recalculate affected robot paths
+            if self.simulation.running:
+                self._recalculate_affected_robot_paths(x, y)
+                
             # Publish obstacle added event
             publish(EventType.OBSTACLE_ADDED, {
                 'position': (x, y),
@@ -54,7 +58,7 @@ class ObstacleController:
             })
             
         elif cell_type in [CellType.PERMANENT_OBSTACLE, CellType.TEMPORARY_OBSTACLE, CellType.SEMI_PERMANENT_OBSTACLE]:
-            # Remove obstacle
+            # Remove obstacle - even during runtime
             grid.set_cell(x, y, CellType.EMPTY)
             
             # Unregister with obstacle manager if available
@@ -78,10 +82,10 @@ class ObstacleController:
             self.simulation.gui.update_environment(grid, self.simulation.robots, self.simulation.items)
             
         return True
-    
+
     def add_temporary_obstacle(self, x: int, y: int, lifespan: int = 10) -> bool:
         """
-        Add a temporary obstacle at the specified position
+        Add a temporary obstacle at the specified position - even during runtime
         
         Args:
             x, y: Obstacle coordinates
@@ -105,14 +109,15 @@ class ObstacleController:
             self.simulation.logger.warning(f"Cannot add temporary obstacle at ({x},{y}): position occupied by another entity")
             return False
             
-        # Add temporary obstacle with obstacle manager
+        # Add temporary obstacle with obstacle manager - even during runtime
         result = self.simulation.obstacle_manager.add_temporary_obstacle(x, y, lifespan)
         
         if result:
             self.simulation.logger.info(f"Added temporary obstacle at ({x},{y}) with lifespan {lifespan}")
             
-            # Recalculate paths for affected robots
-            self._recalculate_affected_robot_paths(x, y)
+            # If simulation is running, recalculate affected robot paths
+            if self.simulation.running:
+                self._recalculate_affected_robot_paths(x, y)
             
             # Publish obstacle added event
             publish(EventType.OBSTACLE_ADDED, {
@@ -127,10 +132,10 @@ class ObstacleController:
                 self.simulation.gui.update_environment(grid, self.simulation.robots, self.simulation.items)
         
         return result
-    
+
     def add_semi_permanent_obstacle(self, x: int, y: int, lifespan: int = 30) -> bool:
         """
-        Add a semi-permanent obstacle at the specified position
+        Add a semi-permanent obstacle at the specified position - even during runtime
         
         Args:
             x, y: Obstacle coordinates
@@ -154,14 +159,15 @@ class ObstacleController:
             self.simulation.logger.warning(f"Cannot add semi-permanent obstacle at ({x},{y}): position occupied by another entity")
             return False
             
-        # Add semi-permanent obstacle with obstacle manager
+        # Add semi-permanent obstacle with obstacle manager - even during runtime
         result = self.simulation.obstacle_manager.add_semi_permanent_obstacle(x, y, lifespan)
         
         if result:
             self.simulation.logger.info(f"Added semi-permanent obstacle at ({x},{y}) with lifespan {lifespan}")
             
-            # Recalculate paths for affected robots
-            self._recalculate_affected_robot_paths(x, y)
+            # If simulation is running, recalculate affected robot paths
+            if self.simulation.running:
+                self._recalculate_affected_robot_paths(x, y)
             
             # Publish obstacle added event
             publish(EventType.OBSTACLE_ADDED, {
