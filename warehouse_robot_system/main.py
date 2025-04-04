@@ -14,8 +14,11 @@ from core.models.grid import Grid, CellType
 from core.models.robot import Robot
 from core.models.item import Item
 
+# Import enhanced pathfinding components
 from simulation.pathfinding.path_finder import PathFinder
 from simulation.pathfinding.strategies import AStarStrategy
+from simulation.pathfinding.advanced_strategies import AdaptiveDynamicAStarStrategy, ProximalPolicyDijkstraStrategy
+from simulation.pathfinding.strategy_selector import PathStrategySelector
 from simulation.controller.item_assigner import ItemAssigner
 from simulation.controller.movement_controller import MovementController
 from simulation.obstacles.obstacle_manager import ObstacleManager
@@ -23,6 +26,7 @@ from simulation.analytics.performance_tracker import PerformanceTracker
 from simulation.analytics.stall_detector import StallDetector
 
 from gui.application import WarehouseGUI
+from gui.components.pathfinding_monitor import PathfindingMonitor
 
 
 def create_simulation():
@@ -56,9 +60,10 @@ def create_simulation():
     # Create obstacle manager (always enabled)
     obstacle_manager = ObstacleManager(grid)
     
-    # Create pathfinding component
+    # Create enhanced pathfinding component with multiple strategies
     path_finder = PathFinder(grid, obstacle_manager)
-    path_finder.set_strategy(AStarStrategy())
+    # Enable strategy selector by default - this will automatically choose the best algorithm
+    path_finder.enable_strategy_selector(True)
     
     # Create item assignment component
     item_assigner = ItemAssigner(grid, path_finder)
@@ -200,10 +205,50 @@ def initialize_with_mixed_obstacles(simulation, robot_count, item_count, obstacl
         item = simulation.item_manager.create_item(i)
 
 
+def add_pathfinding_monitor(gui, path_finder):
+    """
+    Add the pathfinding monitor component to the GUI
+    
+    Args:
+        gui: WarehouseGUI instance
+        path_finder: Enhanced PathFinder instance
+    """
+    # Check if right panel exists
+    if not hasattr(gui, 'right_panel'):
+        print("Warning: Cannot add pathfinding monitor, GUI structure not compatible")
+        return
+    
+    # Create a new frame for the pathfinding monitor
+    import tkinter as tk
+    monitor_frame = tk.Frame(gui.right_panel)
+    monitor_frame.pack(fill=tk.BOTH, expand=False, pady=10)
+    
+    # Create and add the pathfinding monitor
+    pathfinding_monitor = PathfindingMonitor(monitor_frame, path_finder)
+    
+    # Store reference to the monitor
+    gui.pathfinding_monitor = pathfinding_monitor
+    
+    # Set up periodic updates for the monitor
+    def update_monitor():
+        """Update the pathfinding monitor periodically"""
+        if hasattr(gui, 'pathfinding_monitor'):
+            gui.pathfinding_monitor.update_monitor()
+        
+        # Schedule next update
+        gui.root.after(2000, update_monitor)  # Update every 2 seconds
+    
+    # Start updates
+    update_monitor()
+
+
 def main():
     """Main entry point"""
     # Create simulation and GUI
     simulation, gui = create_simulation()
+    
+    # Add pathfinding monitor to GUI
+    add_pathfinding_monitor(gui, simulation.path_finder)
     
     # Run GUI application
     gui.run()

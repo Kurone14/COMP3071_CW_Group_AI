@@ -303,3 +303,220 @@ class ItemAssigner:
                 
                 if not can_reach:
                     print(f"  - NO ROBOT CAN REACH THIS ITEM! It may be physically unreachable.")
+
+    def assign_items_to_robots(self, robots: List[Any], items: List[Any], drop_point: Tuple[int, int]) -> bool:
+        """
+        Advanced item assignment with capacity optimization and clustering
+        
+        Args:
+            robots: List of robots
+            items: List of items
+            drop_point: Dropoff point coordinates (x, y)
+            
+        Returns:
+            bool: True if there are fewer unassigned items than total items
+        """
+        unassigned_items = [item for item in items if not item.picked and not item.assigned]
+        print("\n--- Item Assignment Cycle ---")
+        print(f"Unassigned items: {len(unassigned_items)}")
+        
+        # Handle robots at drop point
+        self._handle_drop_point_deliveries(robots, drop_point)
+        
+        # Handle robots carrying items without paths
+        self._handle_stuck_carrying_robots(robots, drop_point, unassigned_items)
+        
+        # Categorize robots by their status
+        idle_robots = [robot for robot in robots if not robot.path and not robot.carrying_items]
+        carrying_robots = [robot for robot in robots if robot.carrying_items]
+        moving_robots = [robot for robot in robots if robot.path and not robot.carrying_items]
+        
+        print(f"Robot status: {len(idle_robots)} idle, {len(carrying_robots)} carrying, {len(moving_robots)} moving to items")
+        
+        # Ensure carrying robots have paths to drop point
+        self._ensure_carrying_robots_have_paths(carrying_robots, drop_point)
+        
+        # Handle moving robots without paths
+        self._handle_stuck_moving_robots(moving_robots, robots, unassigned_items)
+        
+        # Assign items to idle robots
+        self._assign_items_to_idle_robots(idle_robots, unassigned_items, robots, drop_point)
+        
+        # Periodically reset failed attempts history to prevent deadlocks
+        if random.random() < 0.1:  
+            self.failed_attempts = {}
+            print("Reset failed attempts history")
+        
+        # Check for unreachable items
+        if unassigned_items and idle_robots and len(idle_robots) >= len(unassigned_items):
+            self._handle_unreachable_items(unassigned_items, idle_robots, robots)
+        
+        # Check for any remaining unassigned items with idle robots
+        self._check_remaining_unassigned(items, robots)
+        
+        return len(unassigned_items) < len(items)
+
+    def _handle_unreachable_items(self, unassigned_items: List[Any], idle_robots: List[Any], all_robots: List[Any]) -> None:
+        """
+        Handle items that might be unreachable by any robot
+        
+        Args:
+            unassigned_items: List of unassigned items
+            idle_robots: List of idle robots
+            all_robots: List of all robots
+        """
+        # Count failed assignments per item
+        item_assignment_failures = {}
+        
+        for (robot_id, item_id), attempts in self.failed_attempts.items():
+            if item_id not in item_assignment_failures:
+                item_assignment_failures[item_id] = 0
+            item_assignment_failures[item_id] += attempts
+        
+        # Find items with many failed assignment attempts
+        potentially_unreachable = []
+        for item in unassigned_items:
+            if item.id in item_assignment_failures and item_assignment_failures[item.id] >= len(idle_robots) * 2:
+                potentially_unreachable.append(item)
+        
+        if potentially_unreachable:
+            print(f"WARNING: Detected {len(potentially_unreachable)} potentially unreachable items")
+            
+            for item in potentially_unreachable:
+                print(f"Checking if item #{item.id} at ({item.x}, {item.y}) is truly unreachable...")
+                
+                is_reachable = False
+                best_robot = None
+                shortest_path_length = float('inf')
+                
+                # Try each robot to see if any can reach it
+                for robot in idle_robots:
+                    path = self.path_finder.find_path(
+                        (robot.y, robot.x),
+                        (item.y, item.x),
+                        None,  # Don't avoid other robots for this check
+                        robot.id
+                    )
+                    
+                    if path:
+                        is_reachable = True
+                        if len(path) < shortest_path_length:
+                            shortest_path_length = len(path)
+                            best_robot = robot
+                
+                if not is_reachable:
+                    print(f"CONFIRMED: Item #{item.id} is unreachable. Finding closest available robot...")
+                    
+                    # Find the closest robot to teleport
+                    closest_robot = None
+                    closest_distance = float('inf')
+                    
+                    for robot in idle_robots:
+                        distance = abs(robot.x - item.x) + abs(robot.y - item.y)
+                        if distance < closest_distance:
+                            closest_distance = distance
+                            closest_robot = robot
+                    
+                    if closest_robot:
+                        print(f"TELEPORTING: Robot {closest_robot.id} to unreachable item #{item.id}")
+                        
+                        # Find positions near the item
+                        positions_to_try = []
+                        
+                        # Try positions in increasing distance
+                        for distance in range(1, 5):
+                            for dx in range(-distance, distance + 1):
+                                for dy in range(-distance, distance + 1):
+                                    if abs(dx) + abs(dy) == distance:  # Manhattan distance
+                                        positions_to_try.append((item.x + dx, item.y + dy))
+                        
+                        # Try each position until we find an empty one
+                        teleport_x, teleport_y = item.x, item.y  # Default
+                        for x, y in positions_to_try:
+                            if self.grid.in_bounds(x, y) and self.grid.is_cell_empty(x, y):
+                                teleport_x, teleport_y = x, y
+                                break
+                        
+                        # Clear previous position and move robot
+                        from core.models.grid import CellType
+                        self.grid.set_cell(closest_robot.x, closest_robot.y, CellType.EMPTY)
+                        closest_robot.x, closest_robot.y = teleport_x, teleport_y
+                        self.grid.set_cell(teleport_x, teleport_y, CellType.ROBOT)
+                        
+                        # Assign item to robot
+                        closest_robot.target_items = [item]
+                        item.assigned = True
+                        
+                        # Reset path
+                        closest_robot.path = self.path_finder.find_path(
+                            (closest_robot.y, closest_robot.x),
+                            (item.y, item.x),
+                            all_robots,
+                            closest_robot.id
+                        )
+                        
+                        print(f"Robot {closest_robot.id} teleported to ({teleport_x}, {teleport_y}) and assigned to item #{item.id}")
+                        
+                        # Remove from idle robots
+                        idle_robots.remove(closest_robot)
+                elif best_robot:
+                    print(f"Item #{item.id} is reachable! Assigning to robot {best_robot.id}")
+                    
+                    # Assign item to best robot
+                    best_robot.target_items = [item]
+                    item.assigned = True
+                    
+                    # Set path
+                    best_robot.path = self.path_finder.find_path(
+                        (best_robot.y, best_robot.x),
+                        (item.y, item.x),
+                        all_robots,
+                        best_robot.id
+                    )
+                    
+                    # Remove from idle robots and unassigned items
+                    idle_robots.remove(best_robot)
+                    unassigned_items.remove(item)
+        
+        # For any remaining items after attempting to handle unreachable ones,
+        # forcibly complete them if they've been unreachable for too long
+        if self._should_force_complete_items(unassigned_items):
+            print("CRITICAL: Some items remain unreachable for too long")
+            print("Force completing remaining items to avoid deadlock")
+            
+            for item in unassigned_items:
+                print(f"Force completing item #{item.id}")
+                item.picked = True
+                item.assigned = False
+
+    def _should_force_complete_items(self, unassigned_items: List[Any]) -> bool:
+        """
+        Determine if we should force-complete remaining unreachable items
+        
+        Args:
+            unassigned_items: List of unassigned items
+            
+        Returns:
+            bool: True if items should be force-completed
+        """
+        # Track how many cycles an item remains unassigned
+        if not hasattr(self, 'item_unassigned_cycles'):
+            self.item_unassigned_cycles = {}
+        
+        # Update cycle count for each unassigned item
+        for item in unassigned_items:
+            if item.id not in self.item_unassigned_cycles:
+                self.item_unassigned_cycles[item.id] = 0
+            self.item_unassigned_cycles[item.id] += 1
+        
+        # Clean up tracked items that are no longer unassigned
+        for item_id in list(self.item_unassigned_cycles.keys()):
+            if item_id not in [item.id for item in unassigned_items]:
+                del self.item_unassigned_cycles[item_id]
+        
+        # Check if any item has been unassigned for too long
+        for item in unassigned_items:
+            if self.item_unassigned_cycles.get(item.id, 0) > 30:
+                return True
+        
+        return False

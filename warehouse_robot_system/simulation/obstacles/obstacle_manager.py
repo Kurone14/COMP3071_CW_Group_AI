@@ -20,6 +20,9 @@ class ObstacleManager:
         # Key: robot_id, Value: {(x, y): {'attempts': int, 'successes': int, 'last_seen': int}}
         self.robot_interactions: Dict[int, Dict[Tuple[int, int], Dict]] = {}
         
+        # Track removed obstacles to prevent re-reporting
+        self.recently_removed: Set[Tuple[int, int]] = set()
+        
         # Initialize obstacle classification from the grid
         self._initialize_from_grid()
     
@@ -33,6 +36,20 @@ class ObstacleManager:
                         'type': CellType.PERMANENT_OBSTACLE,
                         'confidence': 0.8,  # Initial confidence level
                         'lifespan': -1,  # -1 means unlimited/permanent
+                        'age': 0
+                    }
+                elif cell_type == CellType.TEMPORARY_OBSTACLE:
+                    self.obstacles[(x, y)] = {
+                        'type': CellType.TEMPORARY_OBSTACLE,
+                        'confidence': 0.8,
+                        'lifespan': 10,  # Default temporary lifespan
+                        'age': 0
+                    }
+                elif cell_type == CellType.SEMI_PERMANENT_OBSTACLE:
+                    self.obstacles[(x, y)] = {
+                        'type': CellType.SEMI_PERMANENT_OBSTACLE,
+                        'confidence': 0.8,
+                        'lifespan': 30,  # Default semi-permanent lifespan
                         'age': 0
                     }
     
@@ -62,8 +79,16 @@ class ObstacleManager:
             print(f"Cannot add obstacle at ({x}, {y}): position occupied by non-obstacle")
             return False
         
+        # If there's already an obstacle of a different type, clear it first
+        if cell_type in [CellType.PERMANENT_OBSTACLE, CellType.TEMPORARY_OBSTACLE, CellType.SEMI_PERMANENT_OBSTACLE]:
+            if cell_type != obstacle_type:
+                self.remove_obstacle(x, y)
+        
         # Update grid with the new obstacle type
-        self.grid.set_cell(x, y, obstacle_type)
+        result = self.grid.set_cell(x, y, obstacle_type)
+        if not result:
+            print(f"Failed to set grid cell at ({x}, {y}) to obstacle type {obstacle_type}")
+            return False
         
         # Store obstacle metadata
         self.obstacles[(x, y)] = {
@@ -72,6 +97,10 @@ class ObstacleManager:
             'lifespan': lifespan,
             'age': 0
         }
+        
+        # Remove from recently removed set if it was there
+        if (x, y) in self.recently_removed:
+            self.recently_removed.remove((x, y))
         
         print(f"Added {self._get_obstacle_name(obstacle_type)} obstacle at ({x}, {y})" + 
               (f" with lifespan {lifespan}" if lifespan > 0 else ""))
@@ -107,11 +136,22 @@ class ObstacleManager:
         if cell_type not in obstacle_types:
             return False
         
-        self.grid.clear_cell(x, y)  # Set to empty space
+        # Clear the cell in the grid
+        if not self.grid.clear_cell(x, y):
+            print(f"Warning: Failed to clear obstacle at ({x}, {y})")
+            return False
         
+        # Remove from tracking
         if (x, y) in self.obstacles:
             del self.obstacles[(x, y)]
+            
+            # Add to recently removed set to avoid re-reporting
+            self.recently_removed.add((x, y))
+            
+            return True
         
+        # Add to recently removed even if not found in tracking
+        self.recently_removed.add((x, y))
         return True
     
     def register_robot_interaction(self, robot_id: int, x: int, y: int, success: bool) -> None:
@@ -186,7 +226,7 @@ class ObstacleManager:
         """
         obstacles_to_remove = []
         
-        for pos, obstacle in self.obstacles.items():
+        for pos, obstacle in list(self.obstacles.items()):
             x, y = pos
             
             # Skip permanent obstacles
@@ -206,12 +246,26 @@ class ObstacleManager:
                     robot_data[pos]['last_seen'] += 1
         
         # Remove expired obstacles
+        removed_count = 0
         for pos in obstacles_to_remove:
             x, y = pos
-            print(f"Removing expired obstacle at ({x}, {y})")
-            self.remove_obstacle(x, y)
+            # Skip if this position was removed recently
+            if pos in self.recently_removed:
+                continue
+                
+            # Only report if obstacle is still on the grid
+            cell_type = self.grid.get_cell(x, y)
+            if cell_type in [CellType.TEMPORARY_OBSTACLE, CellType.SEMI_PERMANENT_OBSTACLE]:
+                print(f"Removing expired obstacle at ({x}, {y})")
+                
+            if self.remove_obstacle(x, y):
+                removed_count += 1
         
-        return len(obstacles_to_remove)
+        # Clear the recently removed set periodically to avoid memory buildup
+        if self.recently_removed and len(self.recently_removed) > 50:
+            self.recently_removed.clear()
+        
+        return removed_count
     
     def is_obstacle_temporary(self, x: int, y: int) -> bool:
         """Check if an obstacle is temporary"""
