@@ -28,13 +28,17 @@ from simulation.analytics.stall_detector import StallDetector
 from gui.application import WarehouseGUI
 from gui.components.pathfinding_monitor import PathfindingMonitor
 
+# Import the metrics components
+from metrics_calculator import SimulationMetricsCalculator
+from metrics_monitor import add_metrics_monitor_to_gui
+
 
 def create_simulation():
     """
     Create and initialize the simulation components
     
     Returns:
-        tuple: (simulation, gui) tuple
+        tuple: (simulation, gui, metrics_monitor) tuple with all components
     """
     # Default configuration
     width = 15
@@ -101,7 +105,10 @@ def create_simulation():
     if hasattr(gui, 'controller'):
         gui.controller.connect_simulation(simulation)
     
-    return simulation, gui
+    # Add metrics monitoring
+    metrics_monitor = add_metrics_monitor_to_gui(gui, simulation)
+    
+    return simulation, gui, metrics_monitor
 
 def initialize_with_mixed_obstacles(simulation, robot_count, item_count, obstacle_density):
     """
@@ -244,8 +251,8 @@ def add_pathfinding_monitor(gui, path_finder):
 
 def main():
     """Main entry point"""
-    # Create simulation and GUI
-    simulation, gui = create_simulation()
+    # Create simulation, GUI, and metrics monitor
+    simulation, gui, metrics_monitor = create_simulation()
     
     # Add pathfinding monitor to GUI
     add_pathfinding_monitor(gui, simulation.path_finder)
