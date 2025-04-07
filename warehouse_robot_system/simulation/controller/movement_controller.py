@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Set, Optional, Any, Callable
 from .collision_resolver import CollisionResolver
 from core.models.grid import Grid, CellType
+from simulation.pathfinding.robot_trajectory_tracker import RobotTrajectoryTracker
 
 
 class MovementController:
@@ -26,6 +27,9 @@ class MovementController:
         self.robot_stuck_time: Dict[int, int] = {}  # Track how long robots have been stuck
         self.robot_waiting: Dict[int, Dict] = {}    # Track robots waiting for temporary obstacles
         self.adjacent_delivery_counts: Dict[int, int] = {}  # Track adjacent delivery attempts
+        
+        # Initialize trajectory tracker
+        self.trajectory_tracker = RobotTrajectoryTracker(max_history=100)
     
     def handle_temporary_obstacles(self, robot: Any, goal: Tuple[int, int]) -> bool:
         """
@@ -95,6 +99,29 @@ class MovementController:
         Returns:
             int: Total number of steps taken
         """
+        # Update target information for trajectory tracking
+        if hasattr(self, 'trajectory_tracker'):
+            for robot in robots:
+                # Record current position for all robots
+                self.trajectory_tracker.update_robot_position(robot.id, robot.x, robot.y)
+                
+                # Update target information
+                if robot.carrying_items and self.grid.drop_point:
+                    # Robot is heading to drop point
+                    self.trajectory_tracker.set_robot_target(
+                        robot.id, 
+                        'drop',
+                        (self.grid.drop_point[0], self.grid.drop_point[1])
+                    )
+                elif robot.target_items and len(robot.target_items) > 0:
+                    # Robot is heading to an item
+                    target_item = robot.target_items[0]
+                    self.trajectory_tracker.set_robot_target(
+                        robot.id,
+                        'item',
+                        (target_item.x, target_item.y)
+                    )
+
         next_positions: Dict[int, Tuple[int, int]] = {}
         total_steps_taken = 0
         
@@ -177,6 +204,7 @@ class MovementController:
             
             robot.path.pop(0)
             robot.x, robot.y = next_x, next_y
+            self.trajectory_tracker.update_robot_position(robot.id, next_x, next_y)
             robot.steps += 1
             total_steps_taken += 1
             
@@ -207,6 +235,18 @@ class MovementController:
                 robot.carrying_items.append(picked_item)
                 picked_item.picked = True
                 robot.current_weight = sum(item.weight for item in robot.carrying_items)
+                
+                # Clear trajectory when reaching an item
+                if hasattr(self, 'trajectory_tracker'):
+                    self.trajectory_tracker.trajectories[robot.id].clear()
+                    
+                    # Update target to drop point if we have one
+                    if self.grid.drop_point:
+                        self.trajectory_tracker.set_robot_target(
+                            robot.id,
+                            'drop',
+                            (self.grid.drop_point[0], self.grid.drop_point[1])
+                        )
                 
                 self._continue_picking_items(robot)
                 
@@ -245,6 +285,15 @@ class MovementController:
             robot.carrying_items = []
             robot.current_weight = 0
             robot.path = []
+            
+            # Clear the trajectory when reaching drop point
+            if hasattr(self, 'trajectory_tracker') and robot.id in self.trajectory_tracker.trajectories:
+                self.trajectory_tracker.trajectories[robot.id].clear()
+                # Clear target since robot has no destination now
+                if robot.id in self.trajectory_tracker.target_types:
+                    del self.trajectory_tracker.target_types[robot.id]
+                if robot.id in self.trajectory_tracker.target_positions:
+                    del self.trajectory_tracker.target_positions[robot.id]
             
             # Reset adjacent delivery counter
             if robot.id in self.adjacent_delivery_counts:

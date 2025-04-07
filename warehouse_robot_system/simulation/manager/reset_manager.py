@@ -34,6 +34,10 @@ class ResetManager:
                 self.simulation.stall_detector.reset()
             except Exception as e:
                 self.simulation.logger.warning(f"Error resetting stall detector: {e}")
+
+        # Also reset trajectory tracking if available
+        if hasattr(self.simulation.movement_controller, 'trajectory_tracker'):
+            self.simulation.movement_controller.trajectory_tracker.reset()
         
         # Store original obstacle data before resetting grid
         original_obstacle_data = {}
@@ -95,7 +99,7 @@ class ResetManager:
                 # Backward compatibility
                 self.simulation.gui.on_simulation_reset()
                 
-            self.simulation.gui.update_environment(self.simulation.grid, self.simulation.robots, self.simulation.items)
+            self.simulation.update_environment(self.simulation.grid, self.simulation.robots, self.simulation.items)
             
             # Update performance stats if available
             if self.simulation.performance_tracker:

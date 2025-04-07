@@ -248,11 +248,38 @@ def add_pathfinding_monitor(gui, path_finder):
     # Start updates
     update_monitor()
 
+def add_trajectory_panel(gui, simulation):
+    """
+    Add trajectory control panel to the GUI
+    
+    Args:
+        gui: The GUI instance
+        simulation: The simulation instance with trajectory tracker
+    """
+    if not hasattr(simulation, 'trajectory_tracker') or simulation.trajectory_tracker is None:
+        print("Warning: Trajectory tracker not available in simulation")
+        return
+        
+    # Import the trajectory control panel
+    from simulation.controller.trajectory_control_panel import TrajectoryControlPanel
+    
+    # Find the right panel to add it to (status panel)
+    if hasattr(gui, 'right_panel'):
+        # Create the control panel
+        trajectory_panel = TrajectoryControlPanel(gui.right_panel, simulation.trajectory_tracker)
+        
+        # Store reference to the panel
+        gui.trajectory_panel = trajectory_panel
+    else:
+        print("Warning: Right panel not found in GUI")
+
 
 def main():
     """Main entry point"""
     # Create simulation, GUI, and metrics monitor
     simulation, gui, metrics_monitor = create_simulation()
+
+    add_trajectory_panel(gui, simulation)
     
     # Add pathfinding monitor to GUI
     add_pathfinding_monitor(gui, simulation.path_finder)

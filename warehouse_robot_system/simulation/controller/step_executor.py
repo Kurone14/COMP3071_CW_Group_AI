@@ -77,7 +77,7 @@ class StepExecutor:
         
         # Update GUI if connected
         if self.simulation.gui:
-            self.simulation.gui.update_environment(
+            self.simulation.update_environment(
                 self.simulation.grid, 
                 self.simulation.robots, 
                 self.simulation.items

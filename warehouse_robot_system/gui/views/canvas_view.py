@@ -74,7 +74,7 @@ class CanvasView:
                         drop_point: Tuple[int, int], robots: List[Any], 
                         items: List[Any], selected_robot_id: Optional[int] = None, 
                         selected_item_id: Optional[int] = None, 
-                        obstacle_manager = None) -> None:
+                        obstacle_manager = None, trajectory_tracker = None) -> None:
         """
         Draw the simulation environment on the canvas
         
@@ -88,6 +88,7 @@ class CanvasView:
             selected_robot_id: ID of the selected robot or None
             selected_item_id: ID of the selected item or None
             obstacle_manager: Optional obstacle manager for advanced visualization
+            trajectory_tracker: Optional trajectory tracker for path visualization
         """
         self.selected_robot_id = selected_robot_id
         self.selected_item_id = selected_item_id
@@ -105,6 +106,10 @@ class CanvasView:
         if drop_point:
             self._draw_drop_point(drop_point)
         
+        # Draw trajectories if tracker is provided
+        if trajectory_tracker and trajectory_tracker.is_enabled():
+            self._draw_trajectories(trajectory_tracker, robots)
+        
         # Draw items
         for item in items:
             if not item.picked:
@@ -113,6 +118,91 @@ class CanvasView:
         # Draw robots
         for robot in robots:
             self._draw_robot(robot)
+
+    def _draw_trajectories(self, trajectory_tracker, robots):
+        """Draw robot movement trajectories to their targets"""
+        cell_size = self.cell_size
+        
+        # Robot color map - assign consistent colors based on target type
+        target_colors = {
+            'item': "#00FF00",   # Green for paths to items
+            'drop': "#0000FF",   # Blue for paths to drop point
+            None: "#888888"      # Gray for undefined targets
+        }
+        
+        # Get trajectories for all robots
+        trajectories = trajectory_tracker.get_all_trajectories()
+        
+        # Draw each robot's trajectory
+        for robot_id, positions in trajectories.items():
+            if not positions or len(positions) < 2:
+                continue
+                
+            # Skip robots that are not in the current view
+            if robot_id not in [r.id for r in robots]:
+                continue
+            
+            # Get the robot's target type and position
+            target_type = trajectory_tracker.get_target_type(robot_id)
+            target_position = trajectory_tracker.get_target_position(robot_id)
+            
+            # Determine color based on target type
+            color = target_colors.get(target_type, "#888888")
+            
+            # Highlight selected robot's trajectory
+            line_width = 2
+            if self.selected_robot_id is not None and robot_id == self.selected_robot_id:
+                line_width = 3
+                # Make the color brighter for selected robot
+                if target_type == 'item':
+                    color = "#00FF88"  # Brighter green
+                elif target_type == 'drop':
+                    color = "#5588FF"  # Brighter blue
+                else:
+                    color = "#FF0000"  # Red for undefined
+            
+            # Create line segments between consecutive points
+            for i in range(len(positions) - 1):
+                x1, y1 = positions[i]
+                x2, y2 = positions[i+1]
+                
+                # Convert grid coordinates to canvas coordinates (center of cells)
+                canvas_x1 = x1 * cell_size + cell_size // 2
+                canvas_y1 = y1 * cell_size + cell_size // 2
+                canvas_x2 = x2 * cell_size + cell_size // 2
+                canvas_y2 = y2 * cell_size + cell_size // 2
+                
+                # Draw the line segment
+                self.canvas.create_line(
+                    canvas_x1, canvas_y1, 
+                    canvas_x2, canvas_y2, 
+                    fill=color, 
+                    width=line_width,
+                    arrow=tk.LAST if i == len(positions) - 2 else None  # Add arrow to last segment
+                )
+            
+            # Draw a line from the last position to the target if available
+            if target_position and positions:
+                last_x, last_y = positions[-1]
+                target_x, target_y = target_position
+                
+                # Only draw if not already at target
+                if (last_x, last_y) != (target_x, target_y):
+                    # Convert to canvas coordinates
+                    canvas_last_x = last_x * cell_size + cell_size // 2
+                    canvas_last_y = last_y * cell_size + cell_size // 2
+                    canvas_target_x = target_x * cell_size + cell_size // 2
+                    canvas_target_y = target_y * cell_size + cell_size // 2
+                    
+                    # Draw dashed line to target
+                    self.canvas.create_line(
+                        canvas_last_x, canvas_last_y,
+                        canvas_target_x, canvas_target_y,
+                        fill=color,
+                        width=line_width,
+                        dash=(5, 3),  # Dashed line
+                        arrow=tk.LAST  # Arrow at target end
+                    )
     
     def _draw_grid_lines(self, width: int, height: int) -> None:
         """Draw grid lines"""

@@ -51,6 +51,10 @@ class WarehouseSimulation:
         self.performance_tracker = performance_tracker
         self.stall_detector = stall_detector
         
+        # Access the trajectory tracker from the movement controller for visualization
+        self.trajectory_tracker = self.movement_controller.trajectory_tracker if hasattr(self.movement_controller, 'trajectory_tracker') else None
+    
+        
         self.robots: List[Robot] = []
         self.items: List[Item] = []
         self.robot_start_positions: Dict[int, Tuple[int, int]] = {}
@@ -146,7 +150,7 @@ class WarehouseSimulation:
             gui.controller.connect_simulation(self)
         
         # Initialize GUI with current simulation state
-        gui.update_environment(self.grid, self.robots, self.items)
+        self.update_environment(self.grid, self.robots, self.items)
         
         # Enable GUI controls
         gui.enable_controls(True)
@@ -305,7 +309,7 @@ class WarehouseSimulation:
             if hasattr(self.gui, 'canvas_view') and hasattr(self.gui.canvas_view, 'resize_canvas'):
                 self.gui.canvas_view.resize_canvas(self.grid.width, self.grid.height)
                 
-            self.gui.update_environment(self.grid, self.robots, self.items)
+            self.update_environment(self.grid, self.robots, self.items)
             
             # Reset GUI state
             if hasattr(self.gui, 'event_handler'):
@@ -353,3 +357,20 @@ class WarehouseSimulation:
         
         if self.performance_tracker:
             self.performance_tracker.add_delivered_items()
+
+    def update_environment(self, grid: Grid, robots: List[Robot], items: List[Item]) -> None:
+        """
+        Update the environment visualization in the GUI
+        
+        Args:
+            grid: The grid to display
+            robots: List of robots to display
+            items: List of items to display
+        """
+        if self.gui:
+            self.gui.update_environment(
+                grid,
+                robots,
+                items,
+                trajectory_tracker=self.trajectory_tracker
+            )

@@ -160,14 +160,16 @@ class WarehouseGUI:
         """Handle simulation completion event"""
         self.event_handler.on_simulation_completed()
     
-    def update_environment(self, grid: Grid, robots: List[Robot], items: List[Item]) -> None:
+    def update_environment(self, grid: Grid, robots: List[Robot], items: List[Item], 
+                        trajectory_tracker=None) -> None:
         """
         Update the environment visualization
         
         Args:
-            grid: Updated grid model
+            grid: Updated grid modelWD
             robots: List of robots
             items: List of items
+            trajectory_tracker: Optional trajectory tracker for path visualization
         """
         self.grid = grid
         self.robots = robots
@@ -176,7 +178,8 @@ class WarehouseGUI:
         # Update canvas with current state
         self.canvas_view.draw_environment(
             grid, self.width, self.height, grid.drop_point, robots, items,
-            self.selected_robot_id, self.selected_item_id, self.obstacle_manager
+            self.selected_robot_id, self.selected_item_id, self.obstacle_manager,
+            trajectory_tracker
         )
         
         # Update status panels
