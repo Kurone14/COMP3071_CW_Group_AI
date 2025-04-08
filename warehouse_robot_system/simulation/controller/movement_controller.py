@@ -99,6 +99,49 @@ class MovementController:
         Returns:
             int: Total number of steps taken
         """
+        # Check if all robots are stuck in the same area
+        all_robots_stuck = True
+        robots_with_items = [r for r in robots if r.carrying_items]
+        
+        if robots_with_items:
+            for robot in robots_with_items:
+                if not hasattr(robot, 'prev_pos'):
+                    robot.prev_pos = (robot.x, robot.y)
+                    robot.stuck_cycles = 0
+                    all_robots_stuck = False
+                elif (robot.x, robot.y) == robot.prev_pos:
+                    robot.stuck_cycles = getattr(robot, 'stuck_cycles', 0) + 1
+                else:
+                    robot.prev_pos = (robot.x, robot.y)
+                    robot.stuck_cycles = 0
+                    all_robots_stuck = False
+            
+            # If all robots carrying items are stuck for more than 10 cycles
+            if all_robots_stuck and all(getattr(r, 'stuck_cycles', 0) > 10 for r in robots_with_items):
+                print("CRITICAL: All robots appear to be stuck in deadlock!")
+                
+                # Force each robot to drop its items at the current location
+                for robot in robots_with_items:
+                    drop_x, drop_y = self.grid.drop_point
+                    
+                    # If close enough to drop point, teleport there directly
+                    if abs(robot.x - drop_x) + abs(robot.y - drop_y) <= 4:
+                        print(f"Teleporting robot {robot.id} to drop point")
+                        self.grid.set_cell(robot.x, robot.y, CellType.EMPTY)
+                        robot.x, robot.y = drop_x, drop_y
+                        self.grid.set_cell(drop_x, drop_y, CellType.ROBOT)
+                        
+                    print(f"Forcing robot {robot.id} to deliver items")
+                    robot.carrying_items = []
+                    robot.current_weight = 0
+                    robot.path = []
+                    robot.stuck_cycles = 0
+                    
+                    if progress_callback:
+                        progress_callback()
+                
+                return 1  # Return 1 step to continue simulation
+
         # Update target information for trajectory tracking
         if hasattr(self, 'trajectory_tracker'):
             for robot in robots:
@@ -221,7 +264,7 @@ class MovementController:
             self._check_drop_point_delivery(robot, progress_callback)
         
         # Handle robots that have been stuck for too long
-        self._handle_stuck_robots(robots)
+        self._handle_stuck_robots(robots, progress_callback)
         
         return total_steps_taken
     
@@ -309,14 +352,14 @@ class MovementController:
             
         drop_x, drop_y = self.grid.drop_point
         
-        # Check if robot is adjacent to drop point (including diagonals)
-        if abs(robot.x - drop_x) <= 1 and abs(robot.y - drop_y) <= 1:
+        # Increase the detection radius to identify robots stuck further away
+        if abs(robot.x - drop_x) <= 3 and abs(robot.y - drop_y) <= 3:  # Increased from 1 to 3
             # Increment adjacent delivery counter
             self.adjacent_delivery_counts[robot.id] = self.adjacent_delivery_counts.get(robot.id, 0) + 1
             
-            # After 3 attempts, force delivery
-            if self.adjacent_delivery_counts[robot.id] >= 3:
-                print(f"Robot {robot.id} adjacent to drop point ({drop_x}, {drop_y}) - force delivering after {self.adjacent_delivery_counts[robot.id]} attempts")
+            # After fewer attempts, force delivery
+            if self.adjacent_delivery_counts[robot.id] >= 2:  # Reduced from 3 to 2
+                print(f"Robot {robot.id} near drop point ({drop_x}, {drop_y}) - force delivering after {self.adjacent_delivery_counts[robot.id]} attempts")
                 robot.carrying_items = []
                 robot.current_weight = 0
                 
@@ -369,9 +412,15 @@ class MovementController:
                 robot.current_weight
             )
     
-    def _handle_stuck_robots(self, robots: List[Any]) -> None:
-        """Handle robots that have been stuck for too long"""
-        stuck_threshold = 10  # Cycles before considering a robot stuck
+    def _handle_stuck_robots(self, robots: List[Any], progress_callback: Optional[Callable] = None) -> None:
+        """
+        Handle robots that have been stuck for too long
+        
+        Args:
+            robots: List of robots to check
+            progress_callback: Optional callback function when progress is made
+        """
+        stuck_threshold = 5  # Reduced from 10 to detect stuck robots faster
         
         for robot in robots:
             if robot.carrying_items and not robot.path and self.robot_stuck_time.get(robot.id, 0) >= stuck_threshold:
@@ -423,21 +472,32 @@ class MovementController:
                             robot.x, robot.y = new_x, new_y
                             self.grid.set_cell(new_x, new_y, CellType.ROBOT)
                             robot.steps += 1
+                            
+                            # Update trajectory if available
+                            if hasattr(self, 'trajectory_tracker'):
+                                self.trajectory_tracker.update_robot_position(robot.id, new_x, new_y)
+                                
                             self.robot_stuck_time[robot.id] = 0
                             moved = True
                             break
                 
                 # If close to drop point, force delivery
                 if not moved:
-                    if abs(robot.x - drop_x) <= 2 and abs(robot.y - drop_y) <= 2:
+                    # Increase the radius for detecting proximity to drop point
+                    if abs(robot.x - drop_x) <= 3 and abs(robot.y - drop_y) <= 3:  # Increased from 2 to 3
                         print(f"EMERGENCY: Robot {robot.id} close to drop point - force delivering items")
                         robot.carrying_items = []
                         robot.current_weight = 0
                         self.robot_stuck_time[robot.id] = 0
+                        
+                        # Call progress callback if provided
+                        if progress_callback:
+                            progress_callback()
+                        
                         moved = True
                 
-                # Last resort: teleport to drop point
-                if not moved and self.robot_stuck_time[robot.id] > 20:
+                # Last resort: teleport to drop point after being stuck for longer
+                if not moved and self.robot_stuck_time[robot.id] > 10:  # Reduced from 20 for faster response
                     print(f"CRITICAL: Robot {robot.id} cannot move - teleporting to drop point")
                     self.grid.set_cell(robot.x, robot.y, CellType.EMPTY)
                     robot.x, robot.y = drop_x, drop_y
@@ -445,6 +505,38 @@ class MovementController:
                     robot.carrying_items = []
                     robot.current_weight = 0
                     self.robot_stuck_time[robot.id] = 0
+                    
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback()
+            
+            # Also check for robots that have a path but aren't making progress
+            elif robot.carrying_items and robot.path and self.robot_stuck_time.get(robot.id, 0) >= stuck_threshold * 2:
+                print(f"Robot {robot.id} has a path but isn't making progress for {self.robot_stuck_time[robot.id]} cycles")
+                
+                # Force path recalculation
+                drop_x, drop_y = self.grid.drop_point
+                robot.path = self.path_finder.find_path(
+                    (robot.y, robot.x), 
+                    (drop_y, drop_x),
+                    [],  # Empty list to avoid considering other robots in this emergency path
+                    robot.id,
+                    robot.current_weight
+                )
+                
+                # If still no path, force teleport after being stuck for even longer
+                if not robot.path and self.robot_stuck_time[robot.id] > 15:
+                    print(f"CRITICAL: Robot {robot.id} cannot find path to drop point - teleporting")
+                    self.grid.set_cell(robot.x, robot.y, CellType.EMPTY)
+                    robot.x, robot.y = drop_x, drop_y
+                    self.grid.set_cell(drop_x, drop_y, CellType.ROBOT)
+                    robot.carrying_items = []
+                    robot.current_weight = 0
+                    self.robot_stuck_time[robot.id] = 0
+                    
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback()
 
     def _check_stuck_item_paths(self, robots: List[Any]) -> None:
         """

@@ -109,7 +109,7 @@ class SimulationManager:
         self.simulation.logger.info("Headless simulation completed.")
     
     def handle_simulation_completed(self) -> None:
-        """Handle simulation completion"""
+        """Handle simulation completion with a small delay"""
         self.simulation.running = False
         
         if self.simulation.performance_tracker:
@@ -125,12 +125,19 @@ class SimulationManager:
         })
         
         if self.simulation.gui:
-            # Direct use of the event handler
-            if hasattr(self.simulation.gui, 'event_handler'):
-                self.simulation.gui.event_handler.on_simulation_completed()
-            else:
-                # Backward compatibility
-                self.simulation.gui.on_simulation_completed()
-                
-            if self.simulation.performance_tracker:
-                self.simulation.gui.update_performance_stats(self.simulation.performance_tracker.format_statistics())
+            # Add a delay before showing completion dialog (1000ms = 1 second)
+            self.simulation.gui.root.after(100, self._show_completion_dialog)
+        
+    def _show_completion_dialog(self):
+        """Show completion dialog after delay"""
+        # Direct use of the event handler
+        if hasattr(self.simulation.gui, 'event_handler'):
+            self.simulation.gui.event_handler.on_simulation_completed()
+        else:
+            # Backward compatibility
+            self.simulation.gui.on_simulation_completed()
+            
+        if self.simulation.performance_tracker:
+            self.simulation.gui.update_performance_stats(
+                self.simulation.performance_tracker.format_statistics()
+            )

@@ -3,6 +3,8 @@ Executes simulation steps and manages the main simulation loop.
 """
 
 from core.utils.event_system import publish, EventType
+from core.models.grid import CellType
+
 
 
 class StepExecutor:
@@ -26,6 +28,36 @@ class StepExecutor:
         """
         if not self.simulation.running or self.simulation.paused:
             return False
+        
+        # Add a cycle counter if it doesn't exist
+        if not hasattr(self, 'cycle_counter'):
+            self.cycle_counter = 0
+        self.cycle_counter += 1
+        
+        # Every 200 cycles, check if we need to force unstick all robots
+        if self.cycle_counter % 200 == 0:
+            items_delivered = self.simulation.performance_tracker.total_items_delivered if self.simulation.performance_tracker else 0
+            robots_carrying = sum(1 for robot in self.simulation.robots if robot.carrying_items)
+            
+            # If no items delivered in 200 cycles and robots are carrying items, force reset
+            if items_delivered == 0 and robots_carrying > 0:
+                print("WARNING: Simulation appears completely stuck. Forcing reset of all robots")
+                drop_x, drop_y = self.simulation.grid.drop_point
+                
+                for robot in self.simulation.robots:
+                    if robot.carrying_items:
+                        # Teleport to drop point
+                        self.simulation.grid.set_cell(robot.x, robot.y, CellType.EMPTY)
+                        robot.x, robot.y = drop_x, drop_y
+                        self.simulation.grid.set_cell(drop_x, drop_y, CellType.ROBOT)
+                        
+                        # Clear items
+                        robot.carrying_items = []
+                        robot.current_weight = 0
+                        robot.path = []
+                        
+                        if hasattr(self.simulation, '_on_progress_made'):
+                            self.simulation._on_progress_made()
         
         # Get remaining items (not picked)
         remaining_items = [item for item in self.simulation.items if not item.picked]
@@ -130,12 +162,14 @@ class StepExecutor:
         Returns:
             bool: True if simulation is complete
         """
+        # First check if there are any unpicked items
         if remaining_items:
             return False
-            
-        # Check if any robot is still carrying items
+                
+        # Then check if any robot is still carrying items
         for robot in self.simulation.robots:
             if robot.carrying_items:
                 return False
-                
+                    
+        # If no unpicked items and no robots carrying items, simulation is complete
         return True

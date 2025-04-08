@@ -29,8 +29,8 @@ from gui.application import WarehouseGUI
 from gui.components.pathfinding_monitor import PathfindingMonitor
 
 # Import the metrics components
-from metrics_calculator import SimulationMetricsCalculator
-from metrics_monitor import add_metrics_monitor_to_gui
+from simulation.analytics.metrics_calculator import SimulationMetricsCalculator
+from simulation.analytics.metrics_monitor import add_metrics_monitor_to_gui
 
 
 def create_simulation():

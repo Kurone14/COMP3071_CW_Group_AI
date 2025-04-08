@@ -1,5 +1,5 @@
 import tkinter as tk
-from metrics_calculator import SimulationMetricsCalculator
+from simulation.analytics.metrics_calculator import SimulationMetricsCalculator
 
 class MetricsMonitor:
     """
