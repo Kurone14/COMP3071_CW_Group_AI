@@ -442,12 +442,36 @@ class StallDetector:
         
     def check_timeout(self) -> bool:
         """
-        Check if the simulation has been running too long
+        Check if the simulation has been running too long without progress
         
         Returns:
             bool: True if simulation has timed out
         """
-        return self.loop_count > 200  # Timeout after 200 cycles
+        # Consider a timeout if:
+        # 1. The simulation has been running for more than 200 cycles
+        # 2. There has been no progress for more than 50 cycles
+        
+        cycles_without_progress = self.loop_count - self.last_progress_at
+        
+        # If no progress for a long time, that's a timeout regardless of total time
+        if cycles_without_progress > 50:
+            self.logger.warning(f"Simulation timed out: No progress for {cycles_without_progress} cycles")
+            return True
+            
+        # If running for a very long time, that's also a timeout
+        if self.loop_count > 200:
+            # Only time out if there are still items to deliver
+            remaining_items = False
+            for robot in self.robots:
+                if robot.carrying_items:
+                    remaining_items = True
+                    break
+                    
+            if remaining_items:
+                self.logger.warning(f"Simulation timed out: Running for {self.loop_count} cycles with undelivered items")
+                return True
+                
+        return False
     
 
     def check_stuck_to_item_robots(self, robots: List[Any], items: List[Any]) -> bool:

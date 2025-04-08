@@ -83,8 +83,7 @@ class StepExecutor:
             
             # Check for timeout
             if self.simulation.stall_detector.check_timeout():
-                self.simulation.logger.warning("TIMEOUT: Maximum simulation time reached")
-                self.simulation.simulation_manager.handle_simulation_completed()
+                self.handle_timeout()
                 return False
         
         # Assign items to robots
@@ -151,6 +150,38 @@ class StepExecutor:
                 if len(robots) >= 2:
                     robot_pair = random.sample(robots, 2)
                     obstacle_manager.share_obstacle_knowledge(robot_pair[0].id, robot_pair[1].id)
+
+    def handle_timeout(self):
+        """Handle simulation timeout by showing a dialog and offering reset"""
+        self.simulation.running = False
+        self.simulation.paused = True
+        
+        self.simulation.logger.warning("TIMEOUT: Maximum simulation time reached")
+        
+        # If GUI is available, show timeout dialog
+        if self.simulation.gui:
+            from tkinter import messagebox
+            
+            def do_reset():
+                """Reset the simulation when the user confirms"""
+                self.simulation.reset()
+            
+            # Schedule dialog to appear in main thread
+            self.simulation.gui.root.after(100, lambda: self._show_timeout_dialog(do_reset))
+
+    def _show_timeout_dialog(self, reset_callback):
+        """Show timeout dialog with reset option"""
+        from tkinter import messagebox
+        
+        result = messagebox.askretrycancel(
+            "Simulation Timed Out",
+            "The simulation has stalled and timed out.\n\n"
+            "Would you like to reset the simulation and try again?",
+            icon="warning"
+        )
+        
+        if result:  # User clicked "Retry"
+            reset_callback()
     
     def _check_completion(self, remaining_items) -> bool:
         """
