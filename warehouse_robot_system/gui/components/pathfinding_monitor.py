@@ -12,18 +12,20 @@ from typing import Dict, Any
 class PathfindingMonitor:
     """
     UI component for monitoring and visualizing pathfinding strategy performance.
-    Displays strategy usage, success rates, and allows for manual strategy selection.
+    Displays strategy usage and allows for manual strategy selection.
     """
     
-    def __init__(self, parent, path_finder):
+    def __init__(self, parent, path_finder, metrics_monitor=None):
         """
         Initialize the pathfinding monitor
         
         Args:
             parent: Parent widget
             path_finder: PathFinder instance
+            metrics_monitor: Optional reference to metrics monitor for coordinated resets
         """
         self.path_finder = path_finder
+        self.metrics_monitor = metrics_monitor
         
         # Create main frame
         self.frame = ttk.LabelFrame(parent, text="Pathfinding Strategy Monitor")
@@ -75,7 +77,7 @@ class PathfindingMonitor:
         self.status_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Create a more compact table with appropriate sizing
-        columns = ("Algorithm", "Usage %", "Success %", "Speed", "Path Quality")
+        columns = ("Algorithm", "Usage %", "Speed")
         self.tree = ttk.Treeview(
             self.status_frame,
             columns=columns,
@@ -90,9 +92,7 @@ class PathfindingMonitor:
         # Set column widths - adjusted to be much narrower
         self.tree.column("Algorithm", width=60, anchor=tk.W)  # Reduced from 90
         self.tree.column("Usage %", width=55, anchor=tk.CENTER)  # Reduced from 65
-        self.tree.column("Success %", width=55, anchor=tk.CENTER)  # Reduced from 65
         self.tree.column("Speed", width=45, anchor=tk.CENTER)  # Reduced from 55
-        self.tree.column("Path Quality", width=65, anchor=tk.CENTER)  # Reduced from 80
 
         # Algorithm display names (even shorter)
         algorithm_display = {
@@ -103,7 +103,7 @@ class PathfindingMonitor:
         
         # Add rows for each strategy with shortened display names
         for strategy_id, display_name in algorithm_display.items():
-            self.tree.insert("", tk.END, iid=strategy_id, values=(display_name, "0.0%", "50.0%", "50.0%", "50.0%"))
+            self.tree.insert("", tk.END, iid=strategy_id, values=(display_name, "0.0%", "0.0%"))
         
         # Add scrollbar
         scrollbar = ttk.Scrollbar(self.status_frame, orient=tk.VERTICAL, command=self.tree.yview)
@@ -139,7 +139,14 @@ class PathfindingMonitor:
         }
         
         # Set initial values
-        self.update_monitor()
+        # self.update_monitor()
+
+        for strategy_id in ["astar", "ad_star", "pp_dijkstra"]:
+            display_name = self.algorithm_names.get(strategy_id, strategy_id)
+            self.tree.item(
+                strategy_id,
+                values=(display_name, "0.0%", "0.0%")
+            )
     
     def _on_apply_strategy(self):
         """Handle apply strategy button click"""
@@ -167,8 +174,15 @@ class PathfindingMonitor:
         # Reset strategy data
         self.path_finder.reset_strategy_data()
         
+        # Reset metrics monitor data if available
+        if self.metrics_monitor and hasattr(self.metrics_monitor, 'metrics_calculator'):
+            print("Resetting metrics calculator data")
+            self.metrics_monitor.metrics_calculator.start_tracking()  # This resets the tracking data
+        
         # Update the display
         self.update_monitor()
+        
+        print("Reset all pathfinding and metrics data")
     
     def update_monitor(self):
         """Update the monitor with current strategy statistics"""
@@ -184,9 +198,7 @@ class PathfindingMonitor:
             
             if strategy in performance_stats:
                 perf = performance_stats[strategy]
-                success_rate = perf.get('success_rate', 0) * 100
                 speed = perf.get('speed', 0) * 100
-                path_quality = perf.get('path_quality', 0) * 100
                 
                 # Update tree item
                 self.tree.item(
@@ -194,9 +206,7 @@ class PathfindingMonitor:
                     values=(
                         self.algorithm_names.get(strategy, strategy),
                         f"{usage:.1f}%",
-                        f"{success_rate:.1f}%",
                         f"{speed:.1f}%",
-                        f"{path_quality:.1f}%"
                     )
                 )
             else:
@@ -206,9 +216,7 @@ class PathfindingMonitor:
                     values=(
                         self.algorithm_names.get(strategy, strategy),
                         "0.0%", 
-                        "50.0%", 
-                        "50.0%", 
-                        "50.0%"
+                        "0.0%"  # This should be "0.0%" but might be "50.0%" somewhere
                     )
                 )
         

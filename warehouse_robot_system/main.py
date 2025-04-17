@@ -212,39 +212,44 @@ def initialize_with_mixed_obstacles(simulation, robot_count, item_count, obstacl
         item = simulation.item_manager.create_item(i)
 
 
-def add_pathfinding_monitor(gui, path_finder):
+def add_pathfinding_monitor(gui, path_finder, metrics_monitor): # Added metrics_monitor argument
     """
     Add the pathfinding monitor component to the GUI
-    
+
     Args:
         gui: WarehouseGUI instance
         path_finder: Enhanced PathFinder instance
+        metrics_monitor: The MetricsMonitor instance # Added documentation
     """
     # Check if right panel exists
     if not hasattr(gui, 'right_panel'):
         print("Warning: Cannot add pathfinding monitor, GUI structure not compatible")
         return
-    
+
     # Create a new frame for the pathfinding monitor
     import tkinter as tk
     monitor_frame = tk.Frame(gui.right_panel)
     monitor_frame.pack(fill=tk.BOTH, expand=False, pady=10)
-    
-    # Create and add the pathfinding monitor
-    pathfinding_monitor = PathfindingMonitor(monitor_frame, path_finder)
-    
+
+    # Create and add the pathfinding monitor, passing metrics_monitor
+    pathfinding_monitor = PathfindingMonitor(monitor_frame, path_finder, metrics_monitor) # Pass metrics_monitor
+
     # Store reference to the monitor
     gui.pathfinding_monitor = pathfinding_monitor
-    
+
     # Set up periodic updates for the monitor
     def update_monitor():
         """Update the pathfinding monitor periodically"""
-        if hasattr(gui, 'pathfinding_monitor'):
-            gui.pathfinding_monitor.update_monitor()
-        
-        # Schedule next update
-        gui.root.after(2000, update_monitor)  # Update every 2 seconds
-    
+        try:
+            if gui.root.winfo_exists() and hasattr(gui, 'pathfinding_monitor'): # Check if GUI still exists
+                gui.pathfinding_monitor.update_monitor()
+                # Schedule next update only if GUI exists
+                gui.root.after(2000, update_monitor)  # Update every 2 seconds
+        except tk.TclError:
+             # Handle cases where the window might be destroyed between checks
+             print("Pathfinding monitor update skipped: GUI window destroyed.")
+
+
     # Start updates
     update_monitor()
 
@@ -273,16 +278,41 @@ def add_trajectory_panel(gui, simulation):
     else:
         print("Warning: Right panel not found in GUI")
 
+def add_clustering_toggle(gui, simulation):
+    """
+    Add clustering toggle component to the GUI
+    
+    Args:
+        gui: The GUI instance
+        simulation: The simulation instance
+    """
+    # Import the clustering toggle component
+    from gui.components.clustering_toggle import ClusteringToggle
+    
+    # Find the right panel to add it to
+    if hasattr(gui, 'right_panel'):
+        # Create the clustering toggle
+        clustering_toggle = ClusteringToggle(gui.right_panel, simulation)
+        
+        # Store reference
+        gui.clustering_toggle = clustering_toggle
+    else:
+        print("Warning: Right panel not found in GUI")
+
 
 def main():
     """Main entry point"""
     # Create simulation, GUI, and metrics monitor
     simulation, gui, metrics_monitor = create_simulation()
 
+    # Add trajectory panel
     add_trajectory_panel(gui, simulation)
     
     # Add pathfinding monitor to GUI
-    add_pathfinding_monitor(gui, simulation.path_finder)
+    add_pathfinding_monitor(gui, simulation.path_finder, metrics_monitor)
+    
+    # Add clustering toggle to GUI
+    add_clustering_toggle(gui, simulation)
     
     # Run GUI application
     gui.run()

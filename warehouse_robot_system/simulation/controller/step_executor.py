@@ -6,7 +6,6 @@ from core.utils.event_system import publish, EventType
 from core.models.grid import CellType
 
 
-
 class StepExecutor:
     """Executes simulation steps and controls the simulation loop"""
     
@@ -102,24 +101,31 @@ class StepExecutor:
         # Update performance statistics
         if self.simulation.performance_tracker:
             self.simulation.performance_tracker.add_steps(steps_taken)
+            
+            # ADDED: Update robot states in performance tracker
+            self.simulation.performance_tracker.update_robot_states(self.simulation.robots)
         
         # Update obstacle lifecycles
         self._update_obstacles()
         
-        # Update GUI if connected
         if self.simulation.gui:
+            # First update robot states to get fresh utilization data
+            if self.simulation.performance_tracker:
+                self.simulation.performance_tracker.update_robot_states(self.simulation.robots)
+            
+            # Then update the environment display
             self.simulation.update_environment(
                 self.simulation.grid, 
                 self.simulation.robots, 
                 self.simulation.items
             )
             
-            # Update performance stats if available
+            # Update performance stats if available - this now includes fresh utilization data
             if self.simulation.performance_tracker:
                 self.simulation.gui.update_performance_stats(
                     self.simulation.performance_tracker.format_statistics()
                 )
-        
+                
         # Check if simulation is complete
         if self._check_completion(remaining_items):
             self.simulation.simulation_manager.handle_simulation_completed()
@@ -198,9 +204,18 @@ class StepExecutor:
             return False
                 
         # Then check if any robot is still carrying items
+        robots_carrying = False
         for robot in self.simulation.robots:
             if robot.carrying_items:
-                return False
+                robots_carrying = True
+                break
                     
         # If no unpicked items and no robots carrying items, simulation is complete
-        return True
+        if not robots_carrying:
+            # Make sure delivered count matches total
+            if self.simulation.performance_tracker:
+                total_items = len(self.simulation.items)
+                self.simulation.performance_tracker.sync_delivered_items_count(total_items, len(remaining_items))
+            return True
+        
+        return False

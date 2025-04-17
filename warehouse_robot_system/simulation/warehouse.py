@@ -69,6 +69,9 @@ class WarehouseSimulation:
         # Get event bus
         self.event_bus = get_event_bus()
         
+        # Metrics monitor reference
+        self.metrics_monitor = None
+        
         # Initialize component managers
         self._init_component_managers()
         
@@ -328,6 +331,12 @@ class WarehouseSimulation:
     def start(self) -> None:
         """Start the simulation"""
         self.simulation_manager.start()
+        
+        # ADDED: Make sure metrics collector is started if available
+        if hasattr(self, 'metrics_monitor') and self.metrics_monitor is not None:
+            self.metrics_monitor.monitoring_active = True
+            self.metrics_monitor.metrics_calculator.start_tracking()
+            self.metrics_monitor._schedule_metrics_collection()
     
     def toggle_pause(self) -> None:
         """Pause or resume the simulation"""
@@ -336,6 +345,12 @@ class WarehouseSimulation:
     def reset(self) -> None:
         """Reset the simulation while preserving environment"""
         self.reset_manager.reset()
+        
+        # ADDED: Reset performance tracker state
+        if self.performance_tracker:
+            self.performance_tracker.reset()
+            # Initialize robot states
+            self.performance_tracker.update_robot_states(self.robots)
     
     def simulation_step(self) -> bool:
         """
@@ -344,7 +359,13 @@ class WarehouseSimulation:
         Returns:
             bool: True if simulation should continue, False if completed
         """
-        return self.step_executor.execute_step()
+        result = self.step_executor.execute_step()
+        
+        # ADDED: Update metrics calculator if available
+        if hasattr(self, 'metrics_monitor') and self.metrics_monitor is not None and self.metrics_monitor.monitoring_active:
+            self.metrics_monitor.metrics_calculator.update_metrics()
+            
+        return result
     
     def run_headless(self) -> None:
         """Run the simulation without GUI (for testing)"""
@@ -355,8 +376,34 @@ class WarehouseSimulation:
         if self.stall_detector:
             self.stall_detector.last_progress_at = self.stall_detector.loop_count
         
+        # Add a single delivered item to the performance tracker
         if self.performance_tracker:
-            self.performance_tracker.add_delivered_items()
+            self.performance_tracker.add_delivered_items(1)
+            
+            # ADDED: Update robot states when progress is made
+            self.performance_tracker.update_robot_states(self.robots)
+        
+        # Track overall progress
+        self._check_delivery_progress()
+
+
+    def _check_delivery_progress(self) -> None:
+        """Check and update overall delivery progress"""
+        # Count remaining items and items being carried
+        remaining_items = [item for item in self.items if not item.picked]
+        carrying_items = sum(len(robot.carrying_items) for robot in self.robots)
+        
+        # Calculate total delivered items
+        total_items = len(self.items)
+        delivered_items = total_items - len(remaining_items) - carrying_items
+        
+        # Ensure performance tracker has the correct count
+        if self.performance_tracker:
+            # Only update if there's a discrepancy
+            if self.performance_tracker.total_items_delivered != delivered_items:
+                self.performance_tracker.total_items_delivered = delivered_items
+                self.logger.info(f"Updated delivered items count: {delivered_items}/{total_items}")
+
 
     def update_environment(self, grid: Grid, robots: List[Robot], items: List[Item]) -> None:
         """
@@ -368,9 +415,29 @@ class WarehouseSimulation:
             items: List of items to display
         """
         if self.gui:
+            # Update the main simulation display
             self.gui.update_environment(
                 grid,
                 robots,
                 items,
                 trajectory_tracker=self.trajectory_tracker
             )
+            
+            # If performance tracker exists, update its display with fresh robot states
+            if self.performance_tracker:
+                # Update robot states before getting statistics - critical for accurate utilization
+                self.performance_tracker.update_robot_states(robots)
+                
+                # Update the performance stats display with newly calculated values
+                self.gui.update_performance_stats(
+                    self.performance_tracker.format_statistics()
+                )
+            
+    def set_metrics_monitor(self, metrics_monitor) -> None:
+        """
+        Set the metrics monitor for this simulation
+        
+        Args:
+            metrics_monitor: The metrics monitor instance
+        """
+        self.metrics_monitor = metrics_monitor

@@ -359,6 +359,19 @@ class StallDetector:
                 
                 self.grid.set_cell(robot.x, robot.y, CellType.ROBOT)
                 robot.path = []
+                
+                # Clear trajectory for this robot
+                if hasattr(self.simulation, 'movement_controller') and \
+                hasattr(self.simulation.movement_controller, 'trajectory_tracker') and \
+                self.simulation.movement_controller.trajectory_tracker:
+                    trajectory_tracker = self.simulation.movement_controller.trajectory_tracker
+                    if robot.id in trajectory_tracker.trajectories:
+                        trajectory_tracker.trajectories[robot.id].clear()
+                        # Also clear target information
+                        if robot.id in trajectory_tracker.target_types:
+                            del trajectory_tracker.target_types[robot.id]
+                        if robot.id in trajectory_tracker.target_positions:
+                            del trajectory_tracker.target_positions[robot.id]
             
             self.last_progress_at = self.loop_count
             made_changes = True

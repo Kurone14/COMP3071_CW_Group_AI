@@ -21,6 +21,9 @@ class ItemAssigner:
         self.path_finder = path_finder
         self.failed_attempts: Dict[Tuple[int, Any], int] = {}  # Track failed assignments
         self.max_attempts = 3  # Maximum number of attempts before giving up
+        
+        # Add clustering toggle flag (enabled by default)
+        self.clustering_enabled = True
     
     def assign_items_to_robots(self, robots: List[Any], items: List[Any], drop_point: Tuple[int, int]) -> bool:
         """
@@ -167,53 +170,75 @@ class ItemAssigner:
             if valid_items:
                 valid_items.sort(key=lambda x: abs(x.x - robot.x) + abs(x.y - robot.y))
                 
-                item_clusters = self._cluster_nearby_items(valid_items, robot)
-                
-                best_cluster = self._select_best_cluster(item_clusters, robot)
-                
-                if best_cluster:
-                    selected_items = []
-                    current_weight = 0
+                # Use clustering if enabled, otherwise just assign the closest item
+                if self.clustering_enabled:
+                    item_clusters = self._cluster_nearby_items(valid_items, robot)
+                    best_cluster = self._select_best_cluster(item_clusters, robot)
                     
-                    for item in best_cluster:
-                        if current_weight + item.weight <= robot.capacity:
-                            if not selected_items:
-                                test_path = self.path_finder.find_path(
-                                    (robot.y, robot.x), 
-                                    (item.y, item.x), 
-                                    all_robots,
-                                    robot.id
-                                )
-                                if not test_path:
-                                    attempt_key = (robot.id, item.id)
-                                    self.failed_attempts[attempt_key] = self.failed_attempts.get(attempt_key, 0) + 1
-                                    print(f"Robot {robot.id} can't find path to item #{item.id} - attempt {self.failed_attempts[attempt_key]}")
-                                    break
+                    if best_cluster:
+                        selected_items = []
+                        current_weight = 0
+                        
+                        for item in best_cluster:
+                            if current_weight + item.weight <= robot.capacity:
+                                if not selected_items:
+                                    test_path = self.path_finder.find_path(
+                                        (robot.y, robot.x), 
+                                        (item.y, item.x), 
+                                        all_robots,
+                                        robot.id
+                                    )
+                                    if not test_path:
+                                        attempt_key = (robot.id, item.id)
+                                        self.failed_attempts[attempt_key] = self.failed_attempts.get(attempt_key, 0) + 1
+                                        print(f"Robot {robot.id} can't find path to item #{item.id} - attempt {self.failed_attempts[attempt_key]}")
+                                        break
+                                
+                                selected_items.append(item)
+                                current_weight += item.weight
+                                unassigned_items.remove(item)
+                                item.assigned = True
+                        
+                        if selected_items:
+                            robot.target_items = selected_items
+                            first_item = selected_items[0]
                             
-                            selected_items.append(item)
-                            current_weight += item.weight
-                            unassigned_items.remove(item)
-                            item.assigned = True
+                            robot.path = self.path_finder.find_path(
+                                (robot.y, robot.x), 
+                                (first_item.y, first_item.x), 
+                                all_robots,
+                                robot.id
+                            )
+                            
+                            if robot.path:
+                                print(f"Robot {robot.id} assigned to pick up {len(selected_items)} items with total weight {current_weight}kg, starting with item #{first_item.id}")
+                            else:
+                                print(f"Robot {robot.id} failed to find path to items during final assignment")
+                                for item in selected_items:
+                                    item.assigned = False
+                                    unassigned_items.append(item)
+                                robot.target_items = []
+                else:
+                    # Simpler assignment logic when clustering is disabled - just take the closest item
+                    closest_item = valid_items[0]
+                    test_path = self.path_finder.find_path(
+                        (robot.y, robot.x), 
+                        (closest_item.y, closest_item.x), 
+                        all_robots,
+                        robot.id
+                    )
                     
-                    if selected_items:
-                        robot.target_items = selected_items
-                        first_item = selected_items[0]
-                        
-                        robot.path = self.path_finder.find_path(
-                            (robot.y, robot.x), 
-                            (first_item.y, first_item.x), 
-                            all_robots,
-                            robot.id
-                        )
-                        
-                        if robot.path:
-                            print(f"Robot {robot.id} assigned to pick up {len(selected_items)} items with total weight {current_weight}kg, starting with item #{first_item.id}")
-                        else:
-                            print(f"Robot {robot.id} failed to find path to items during final assignment")
-                            for item in selected_items:
-                                item.assigned = False
-                                unassigned_items.append(item)
-                            robot.target_items = []
+                    if test_path:
+                        unassigned_items.remove(closest_item)
+                        closest_item.assigned = True
+                        robot.target_items = [closest_item]
+                        robot.path = test_path
+                        print(f"Robot {robot.id} assigned to pick up single item #{closest_item.id} with weight {closest_item.weight}kg")
+                    else:
+                        attempt_key = (robot.id, closest_item.id)
+                        self.failed_attempts[attempt_key] = self.failed_attempts.get(attempt_key, 0) + 1
+                        print(f"Robot {robot.id} can't find path to item #{closest_item.id} - attempt {self.failed_attempts[attempt_key]}")
+
     
     def _cluster_nearby_items(self, items: List[Any], robot: Any) -> List[List[Any]]:
         """Group items that are close to each other for more efficient pickup"""

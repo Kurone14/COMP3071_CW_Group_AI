@@ -1,3 +1,7 @@
+"""
+Integrates metrics monitoring into the warehouse simulation GUI.
+"""
+
 import tkinter as tk
 from simulation.analytics.metrics_calculator import SimulationMetricsCalculator
 
@@ -28,7 +32,7 @@ class MetricsMonitor:
         self._add_metrics_button()
         
         # Setup periodic metrics collection
-        self.collection_interval = 500  # milliseconds
+        self.collection_interval = 250  # milliseconds (faster updates)
     
     def _add_metrics_button(self):
         """Add metrics button to the GUI"""
@@ -80,13 +84,25 @@ class MetricsMonitor:
             # Collect metrics
             self.metrics_calculator.update_metrics()
             
+            # If simulation is running, ensure data reflects current state
+            if self.simulation.running and not self.simulation.paused:
+                # Force immediate update of robot states
+                # This ensures we capture robot movement between UI updates
+                for robot_id, metrics in self.metrics_calculator.robot_metrics.items():
+                    # Find the robot
+                    for robot in self.simulation.robots:
+                        if robot.id == robot_id:
+                            # Update position tracking
+                            metrics['previous_position'] = (robot.x, robot.y)
+                            break
+            
             # Schedule next collection
             self.gui.root.after(self.collection_interval, self._schedule_metrics_collection)
     
     def _on_simulation_step(self, event_data=None):
         """Handle simulation step event"""
-        # Update metrics on each step (already handled by scheduled collection)
-        pass
+        # Ensure metrics are up to date on each step
+        self.metrics_calculator.update_metrics()
     
     def _on_simulation_completed(self, event_data=None):
         """Handle simulation completion event"""
@@ -99,10 +115,18 @@ class MetricsMonitor:
     def _show_metrics_visualization(self):
         """Show the metrics visualization window"""
         self.metrics_calculator.create_visualization_window()
+    
+    def reset_metrics(self):
+        """Reset all metrics data"""
+        if self.metrics_calculator:
+            self.metrics_calculator.start_tracking()  # This resets the tracking data
+            print("Metrics monitor data has been reset")
+            return True
+        return False
 
 def add_metrics_monitor_to_gui(gui, simulation):
     """
-    Add metrics monitoring to the GUI
+    Add metrics monitoring to the GUI with proper integration
     
     Args:
         gui: The GUI application instance
@@ -111,5 +135,16 @@ def add_metrics_monitor_to_gui(gui, simulation):
     Returns:
         MetricsMonitor: The metrics monitor instance
     """
+    from simulation.analytics.metrics_monitor import MetricsMonitor
+    
+    # Create metrics monitor
     metrics_monitor = MetricsMonitor(gui, simulation)
+    
+    # Store reference to metrics monitor in simulation for callbacks
+    simulation.set_metrics_monitor(metrics_monitor)
+    
+    # Initialize the performance tracker with robot states if available
+    if simulation.performance_tracker:
+        simulation.performance_tracker.update_robot_states(simulation.robots)
+    
     return metrics_monitor

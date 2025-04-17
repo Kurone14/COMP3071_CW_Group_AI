@@ -313,7 +313,7 @@ class MovementController:
                         robot.id,
                         robot.current_weight
                     )
-    
+        
     def _check_drop_point_delivery(self, robot: Any, progress_callback: Optional[Callable]) -> None:
         """Check if robot has reached drop point and handle delivery"""
         if not robot.carrying_items:
@@ -324,7 +324,10 @@ class MovementController:
         
         # Check exact match with drop point
         if (robot.x, robot.y) == (drop_x, drop_y):
-            print(f"Robot {robot.id} successfully delivered {len(robot.carrying_items)} items!")
+            # Count how many items are being delivered
+            delivered_count = len(robot.carrying_items)
+            
+            print(f"Robot {robot.id} successfully delivered {delivered_count} items!")
             robot.carrying_items = []
             robot.current_weight = 0
             robot.path = []
@@ -343,7 +346,9 @@ class MovementController:
                 del self.adjacent_delivery_counts[robot.id]
             
             if progress_callback:
-                progress_callback()
+                # Call progress callback for each item delivered
+                for _ in range(delivered_count):
+                    progress_callback()
     
     def _check_adjacent_to_drop_point(self, robot: Any, progress_callback: Optional[Callable]) -> None:
         """Check if robot is adjacent to drop point but has no path"""
