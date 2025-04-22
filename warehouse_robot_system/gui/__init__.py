@@ -1,0 +1,1 @@
+from gui.application import WarehouseGUI
